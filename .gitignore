@@ -8,3 +8,4 @@ target/
 .env
 *.log
 *.mobileconfig
+alembic.ini
