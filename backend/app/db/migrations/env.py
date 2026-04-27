@@ -4,7 +4,13 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from app.db.base import Base
-from app.data import models  # noqa: F401 — register models for autogenerate
+from app.data import models  # noqa: F401
+from app.features import models  # noqa: F401
+from app.strategy import models  # noqa: F401
+from app.backtest import models  # noqa: F401
+from app.audit import models  # noqa: F401
+from app.risk import models  # noqa: F401
+from app.paper import models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
