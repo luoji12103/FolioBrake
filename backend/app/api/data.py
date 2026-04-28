@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date as date_type
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -51,7 +51,7 @@ class InstrumentOut(BaseModel):
 
 
 class BarOut(BaseModel):
-    trade_date: str
+    trade_date: date_type
     open: float
     high: float
     low: float
@@ -61,6 +61,10 @@ class BarOut(BaseModel):
     adj_close: Optional[float] = None
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("trade_date")
+    def serialize_trade_date(self, v: date_type) -> str:
+        return v.isoformat()
 
 
 class QualityReportOut(BaseModel):

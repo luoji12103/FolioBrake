@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(ssh *ClawCloud-JP-8C32G-320G-1T1G-LXC *)",
-      "Bash(scp *ClawCloud-JP-8C32G-320G-1T1G-LXC:*)"
+      "Bash(scp *ClawCloud-JP-8C32G-320G-1T1G-LXC:*)",
+      "Bash(curl *)",
+      "Bash(npm --cache *)",
+      "Bash(npm --prefix *)",
+      "Bash(npx *)",
+      "Bash(pkill *)",
+      "Bash(lsof *)"
     ]
   }
 }

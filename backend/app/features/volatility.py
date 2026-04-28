@@ -12,13 +12,17 @@ def compute_volatility_features(prefix: str, prices: list[float], dates: list[da
             results[f"{prefix}_realized_vol_{w}d"] = vol
 
     if len(prices) >= 252:
-        daily_rets_20 = np.diff(prices[-20:]) / prices[-21:-1]
+        daily_rets_20 = np.diff(prices[-20:]) / prices[-20:-1]
         vol_20 = float(np.std(daily_rets_20) * np.sqrt(252))
         rolling_vols = []
-        for i in range(252 - 20):
-            start = -(252 - i)
-            end = -(252 - i - 21)
-            window_rets = np.diff(prices[start:end]) / prices[start - 1:end - 1]
+        n_windows = len(prices) - 252
+        for i in range(max(1, n_windows)):
+            w_start = -(252 + i)
+            w_end = -(i + 1) if i > 0 else None
+            window = prices[w_start:w_end]
+            if len(window) < 22:
+                break
+            window_rets = np.diff(window) / window[:-1]
             rolling_vols.append(float(np.std(window_rets) * np.sqrt(252)))
         if rolling_vols:
             pct_rank = sum(1 for v in rolling_vols if v <= vol_20) / len(rolling_vols)
