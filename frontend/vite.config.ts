@@ -18,14 +18,7 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
     proxy: {
-      "/health": { target: apiTarget, changeOrigin: true },
-      "/data": { target: apiTarget, changeOrigin: true },
-      "/features": { target: apiTarget, changeOrigin: true },
-      "/strategy": { target: apiTarget, changeOrigin: true },
-      "/risk": { target: apiTarget, changeOrigin: true },
-      "/backtest": { target: apiTarget, changeOrigin: true },
-      "/audit": { target: apiTarget, changeOrigin: true },
-      "/paper": { target: apiTarget, changeOrigin: true },
+      "/api": { target: apiTarget, changeOrigin: true },
     },
   },
 }));

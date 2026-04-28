@@ -60,15 +60,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(data_router, prefix="/data", tags=["data"])
-app.include_router(features_router, prefix="/features", tags=["features"])
-app.include_router(risk_router, prefix="/risk", tags=["risk"])
-app.include_router(strategy_router, prefix="/strategy", tags=["strategy"])
-app.include_router(backtest_router, prefix="/backtest", tags=["backtest"])
-app.include_router(audit_router, prefix="/audit", tags=["audit"])
-app.include_router(paper_router, prefix="/paper", tags=["paper"])
+app.include_router(data_router, prefix="/api/data", tags=["data"])
+app.include_router(features_router, prefix="/api/features", tags=["features"])
+app.include_router(risk_router, prefix="/api/risk", tags=["risk"])
+app.include_router(strategy_router, prefix="/api/strategy", tags=["strategy"])
+app.include_router(backtest_router, prefix="/api/backtest", tags=["backtest"])
+app.include_router(audit_router, prefix="/api/audit", tags=["audit"])
+app.include_router(paper_router, prefix="/api/paper", tags=["paper"])
 
 
-@app.get("/health")
+@app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "version": "0.1.0"}
