@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { useSignals, Signal } from "../api/hooks";
+import { useSignals, usePortfolio, Signal } from "../api/hooks";
+import { WeightBarChart } from "../components/Charts";
 import "./shared.css";
 
 /* ---- Badge helpers ---- */
@@ -203,6 +204,7 @@ function SignalDetails({ signals }: { signals: Signal[] }) {
 
 function Signals() {
   const { data: signals, error, isLoading } = useSignals();
+  const { data: portfolio, isLoading: portfolioLoading, error: portfolioError } = usePortfolio();
 
   return (
     <div className="page">
@@ -229,6 +231,20 @@ function Signals() {
           </div>
           <SignalDetails signals={signals} />
         </>
+      )}
+
+      {!portfolioLoading && !portfolioError && portfolio && portfolio.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <h3 className="section-title">Portfolio Weights</h3>
+          <div className="card">
+            <WeightBarChart
+              data={portfolio.map((p) => ({
+                symbol: p.symbol,
+                target_weight: p.target_weight * 100,
+              }))}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
