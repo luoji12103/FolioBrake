@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../api/client";
 import { EquityChart, DrawdownChart } from "../components/Charts";
+import { ErrorMessage } from "../components/ErrorMessage";
 import "./shared.css";
 
 function Backtest() {
@@ -10,17 +11,25 @@ function Backtest() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ start_date: "2025-01-01", end_date: "2025-10-28", initial_capital: "100000" });
 
+  const isValid = form.start_date && form.end_date && parseFloat(form.initial_capital) > 0
+    && form.start_date < form.end_date;
+
   const handleRun = async () => {
+    if (!isValid) return;
     setLoading(true); setError(null);
     try {
       const { data } = await api.post("/backtest/run", {
-        start_date: form.start_date, end_date: form.end_date,
+        start_date: form.start_date.replace(/-/g, ""),
+        end_date: form.end_date.replace(/-/g, ""),
         initial_capital: parseFloat(form.initial_capital),
       });
       const res = await api.get(`/backtest/results/${data.run_id}`);
       setRunId(data.run_id);
       setResults(res.data);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e.message || "Unknown error";
+      setError(msg);
+    }
     finally { setLoading(false); }
   };
 
@@ -39,23 +48,23 @@ function Backtest() {
         <div className="grid-col-3">
           <div className="form-group">
             <label>Start Date</label>
-            <input className="form-input" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} />
+            <input className="form-input" type="date" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} />
           </div>
           <div className="form-group">
             <label>End Date</label>
-            <input className="form-input" value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} />
+            <input className="form-input" type="date" value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} />
           </div>
           <div className="form-group">
             <label>Initial Capital</label>
             <input className="form-input" type="number" value={form.initial_capital} onChange={e => setForm({...form, initial_capital: e.target.value})} />
           </div>
         </div>
-        <button className="btn-primary" onClick={handleRun} disabled={loading} style={{marginTop:12}}>
+        <button className="btn-primary" onClick={handleRun} disabled={loading || !isValid} style={{marginTop:12}}>
           {loading ? "Running..." : "Run Backtest"}
         </button>
       </div>
 
-      {error && <div className="state-banner state-error">Error: {error}</div>}
+      {error && <ErrorMessage message={error} onRetry={handleRun} />}
 
       {!runId && !loading && !error && (
         <div className="state-banner state-empty">Configure and run a backtest to see results.</div>
