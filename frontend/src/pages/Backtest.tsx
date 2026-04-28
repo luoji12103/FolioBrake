@@ -4,6 +4,22 @@ import { EquityChart, DrawdownChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import "./shared.css";
 
+const METRIC_TOOLTIPS: Record<string, string> = {
+  total_return: "Overall portfolio return over the entire backtest period",
+  cagr: "Compound Annual Growth Rate — annualized return",
+  sharpe_ratio: "Risk-adjusted return. Higher = better return per unit of risk",
+  max_drawdown: "Largest peak-to-trough decline. Lower absolute value is better",
+  volatility: "Annualized standard deviation of daily returns. Lower = more stable",
+  win_rate: "Fraction of trades that were profitable",
+};
+
+function formatMetricValue(key: string, v: number): string {
+  const pctKeys = ["total_return", "cagr", "max_drawdown", "volatility", "win_rate"];
+  if (pctKeys.includes(key)) return (v * 100).toFixed(2) + "%";
+  if (key === "sharpe_ratio") return v.toFixed(2);
+  return v.toFixed(4);
+}
+
 function Backtest() {
   const [runId, setRunId] = useState<number | null>(null);
   const [results, setResults] = useState<any>(null);
@@ -74,10 +90,15 @@ function Backtest() {
         <div className="card">
           <h3>Results (Run #{runId})</h3>
           <div className="metric-grid">
-            {Object.entries(results.metrics || {}).map(([k,v]) => (
+            {Object.entries(results.metrics || {}).map(([k, v]) => (
               <div key={k} className="metric-card">
-                <div className="metric-value">{typeof v === 'number' ? (v * 100).toFixed(2) + '%' : String(v)}</div>
-                <div className="metric-label">{k.replace(/_/g, ' ')}</div>
+                <div className="metric-label">
+                  {k.replace(/_/g, " ")}
+                  <span className="metric-help" title={METRIC_TOOLTIPS[k] || ""}>?</span>
+                </div>
+                <div className={"metric-value" + (k === "total_return" ? " primary" : "") + (typeof v === "number" && v > 0 ? " positive" : typeof v === "number" && v < 0 ? " negative" : "")}>
+                  {typeof v === "number" ? formatMetricValue(k, v) : String(v)}
+                </div>
               </div>
             ))}
           </div>

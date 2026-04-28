@@ -14,6 +14,20 @@
   background-color: var(--color-bg);
 }
 
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #faf9f6;
+    --color-surface: #ffffff;
+    --color-border: #e8e5df;
+    --color-text: #1a1a16;
+    --color-text-muted: #8c8a80;
+    --color-accent: #3568d4;
+    --color-green: #0d8a5e;
+    --color-yellow: #b45309;
+    --color-red: #dc2626;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
