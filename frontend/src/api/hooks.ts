@@ -134,13 +134,11 @@ export function useQuality(symbol: string | null) {
 // ---------------------------------------------------------------------------
 
 export interface Signal {
+  instrument_id: number;
   symbol: string;
-  name: string;
   score: number;
   rank: number;
-  target_weight: number;
-  action: "BUY" | "SELL" | "HOLD";
-  reason: string;
+  reason: Record<string, any>;
 }
 
 export function useSignals() {
@@ -155,10 +153,11 @@ export function useSignals() {
 // ---------------------------------------------------------------------------
 
 export interface PortfolioTarget {
+  instrument_id: number;
   symbol: string;
-  name: string;
   target_weight: number;
-  current_weight: number;
+  score: number;
+  constraint_info: Record<string, any>;
 }
 
 export function usePortfolio() {
@@ -175,10 +174,8 @@ export function usePortfolio() {
 export type RiskLevel = "NORMAL" | "CAUTION" | "DEFENSIVE" | "HALT";
 
 export interface RiskState {
-  level: RiskLevel;
-  description: string;
-  triggered_at: string;
-  reason: string;
+  state: RiskLevel;
+  transition_reason: string;
 }
 
 export function useRiskState() {
@@ -192,16 +189,12 @@ export function useRiskState() {
 // Risk Rules
 // ---------------------------------------------------------------------------
 
-export type RuleSeverity = "INFO" | "WARNING" | "CRITICAL";
-
 export interface RiskRule {
-  id: string;
-  name: string;
-  description: string;
-  severity: RuleSeverity;
+  date: string;
+  rule_name: string;
   triggered: boolean;
-  threshold: string;
-  current_value: string;
+  severity: "INFO" | "WARNING" | "CRITICAL";
+  detail: Record<string, any>;
 }
 
 export function useRiskRules() {
@@ -215,19 +208,15 @@ export function useRiskRules() {
 // Risk Overlay
 // ---------------------------------------------------------------------------
 
-export interface OverlayEntry {
-  symbol: string;
-  name: string;
-  original_weight: number;
-  final_weight: number;
-  adjustment: number;
+export interface OverlayDecision {
+  decision: string;
   reason: string;
 }
 
 export function useRiskOverlay() {
   return useQuery(async () => {
     const { data } = await api.get("/risk/overlay");
-    return data as OverlayEntry[];
+    return data as OverlayDecision;
   });
 }
 
@@ -325,14 +314,12 @@ export function useAuditReport(runId: string | null) {
 // ---------------------------------------------------------------------------
 
 export interface PaperHolding {
-  symbol: string;
-  name: string;
+  instrument_id: number;
   quantity: number;
   avg_cost: number;
   current_price: number;
-  current_value: number;
+  market_value: number;
   pnl: number;
-  pnl_pct: number;
 }
 
 export function usePaperHoldings(portfolioId: string | null) {

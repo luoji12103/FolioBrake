@@ -98,7 +98,7 @@ function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
   }
 
   const sorted = [...holdings].sort(
-    (a, b) => b.current_value - a.current_value
+    (a, b) => b.market_value - a.market_value
   );
 
   return (
@@ -108,25 +108,22 @@ function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
         <table>
           <thead>
             <tr>
-              <th>Symbol</th>
-              <th>Name</th>
+              <th>Instrument ID</th>
               <th>Quantity</th>
               <th>Avg Cost</th>
               <th>Current Price</th>
-              <th>Current Value</th>
+              <th>Market Value</th>
               <th>P&amp;L</th>
-              <th>P&amp;L %</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((h) => (
-              <tr key={h.symbol}>
-                <td style={{ fontWeight: 600 }}>{h.symbol}</td>
-                <td>{h.name}</td>
+              <tr key={h.instrument_id}>
+                <td style={{ fontWeight: 600 }}>{h.instrument_id}</td>
                 <td>{h.quantity.toLocaleString()}</td>
                 <td>{fmtCurrency(h.avg_cost)}</td>
                 <td>{fmtCurrency(h.current_price)}</td>
-                <td>{fmtCurrency(h.current_value)}</td>
+                <td>{fmtCurrency(h.market_value)}</td>
                 <td
                   style={{
                     color:
@@ -137,17 +134,6 @@ function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
                   }}
                 >
                   {fmtCurrency(h.pnl)}
-                </td>
-                <td
-                  style={{
-                    color:
-                      h.pnl_pct >= 0
-                        ? "var(--color-green)"
-                        : "var(--color-red)",
-                    fontWeight: 600,
-                  }}
-                >
-                  {fmtPct(h.pnl_pct)}
                 </td>
               </tr>
             ))}

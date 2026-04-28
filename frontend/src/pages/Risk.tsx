@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useRiskState, useRiskRules, useRiskOverlay, RiskLevel } from "../api/hooks";
 import RiskBadge from "../components/RiskBadge";
 import "./shared.css";
@@ -14,19 +13,6 @@ function SeverityBadge({ severity }: { severity: "INFO" | "WARNING" | "CRITICAL"
   return (
     <span className={`badge ${map[severity]}`}>{severity}</span>
   );
-}
-
-/* ---- Format percentage ---- */
-
-function fmtPct(v: number): string {
-  return `${(v * 100).toFixed(2)}%`;
-}
-
-function pctDiff(orig: number, final: number): string {
-  const diff = (final - orig) * 100;
-  if (diff > 0) return `+${diff.toFixed(2)}pp`;
-  if (diff < 0) return `${diff.toFixed(2)}pp`;
-  return "0";
 }
 
 /* ---- State machine ---- */
@@ -99,15 +85,6 @@ function Risk() {
   const isLoading = stateLoading || rulesLoading || overlayLoading;
   const error = stateErr || rulesErr || overlayErr;
 
-  /* ---- Group overlay decisions by adjustment direction ---- */
-  const overlaySummary = useMemo(() => {
-    if (!overlay) return null;
-    const increased = overlay.filter((o) => o.adjustment > 0);
-    const decreased = overlay.filter((o) => o.adjustment < 0);
-    const unchanged = overlay.filter((o) => o.adjustment === 0);
-    return { increased, decreased, unchanged };
-  }, [overlay]);
-
   return (
     <div className="page">
       <h2>Risk Overlay</h2>
@@ -151,7 +128,7 @@ function Risk() {
                   display: "inline-block",
                 }}
               >
-                <RiskBadge state={riskState.level} />
+                <RiskBadge state={riskState.state} />
               </span>
             </div>
             <p
@@ -164,24 +141,14 @@ function Risk() {
                 marginRight: "auto",
               }}
             >
-              {riskState.reason}
-            </p>
-            <p
-              style={{
-                marginTop: 8,
-                fontSize: 12,
-                color: "var(--color-text-muted)",
-              }}
-            >
-              Triggered:{" "}
-              {new Date(riskState.triggered_at).toLocaleString("en-CN")}
+              {riskState.transition_reason}
             </p>
           </div>
 
           {/* ---- State machine ---- */}
           <div className="card">
             <div className="card-title">State Machine</div>
-            <StateMachine active={riskState.level} />
+            <StateMachine active={riskState.state} />
           </div>
 
           {/* ---- Triggered rules ---- */}
@@ -192,26 +159,24 @@ function Risk() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Name</th>
-                      <th>Description</th>
+                      <th>Date</th>
+                      <th>Rule Name</th>
                       <th>Severity</th>
-                      <th>Threshold</th>
-                      <th>Current Value</th>
+                      <th>Detail</th>
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rules.map((r) => (
-                      <tr key={r.id}>
-                        <td style={{ fontWeight: 600 }}>{r.name}</td>
-                        <td style={{ whiteSpace: "normal", maxWidth: 240 }}>
-                          {r.description}
-                        </td>
+                      <tr key={r.rule_name}>
+                        <td>{new Date(r.date).toLocaleDateString("en-CN")}</td>
+                        <td style={{ fontWeight: 600 }}>{r.rule_name}</td>
                         <td>
                           <SeverityBadge severity={r.severity} />
                         </td>
-                        <td>{r.threshold}</td>
-                        <td>{r.current_value}</td>
+                        <td style={{ whiteSpace: "normal", maxWidth: 240, fontSize: 13 }}>
+                          {JSON.stringify(r.detail)}
+                        </td>
                         <td>
                           <span
                             className={`badge ${r.triggered ? "badge-fail" : "badge-pass"}`}
@@ -231,84 +196,34 @@ function Risk() {
             )}
           </div>
 
-          {/* ---- Overlay decision table ---- */}
+          {/* ---- Overlay decision ---- */}
           <div className="card">
-            <div className="card-title">
-              Overlay Decisions — Original vs Final Weights
-            </div>
-            {overlay && overlay.length > 0 ? (
+            <div className="card-title">Overlay Decision</div>
+            {overlay ? (
               <>
-                {/* Summary */}
-                {overlaySummary && (
-                  <p
-                    style={{
-                      fontSize: 13,
-                      color: "var(--color-text-muted)",
-                      marginBottom: 12,
-                    }}
-                  >
-                    {overlaySummary.decreased.length} decreased,{" "}
-                    {overlaySummary.increased.length} increased,{" "}
-                    {overlaySummary.unchanged.length} unchanged
-                  </p>
-                )}
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Symbol</th>
-                        <th>Name</th>
-                        <th>Original</th>
-                        <th>Final</th>
-                        <th>Adjustment</th>
-                        <th>Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {overlay.map((o) => {
-                        const diffStr = pctDiff(
-                          o.original_weight,
-                          o.final_weight
-                        );
-                        const isDown = o.adjustment < 0;
-                        const isUp = o.adjustment > 0;
-                        return (
-                          <tr key={o.symbol}>
-                            <td style={{ fontWeight: 600 }}>{o.symbol}</td>
-                            <td>{o.name}</td>
-                            <td>{fmtPct(o.original_weight)}</td>
-                            <td>{fmtPct(o.final_weight)}</td>
-                            <td
-                              style={{
-                                color: isDown
-                                  ? "var(--color-red)"
-                                  : isUp
-                                    ? "var(--color-green)"
-                                    : "var(--color-text-muted)",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {diffStr}
-                            </td>
-                            <td
-                              style={{
-                                whiteSpace: "normal",
-                                maxWidth: 240,
-                                fontSize: 13,
-                              }}
-                            >
-                              {o.reason}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <p
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: "var(--color-text)",
+                    marginBottom: 8,
+                  }}
+                >
+                  {overlay.decision}
+                </p>
+                <p
+                  style={{
+                    fontSize: 14,
+                    color: "var(--color-text-muted)",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {overlay.reason}
+                </p>
               </>
             ) : (
               <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-                No overlay adjustments available.
+                No overlay decision available.
               </p>
             )}
           </div>
