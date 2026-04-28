@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
 from app.db.base import get_db
+from app.strategy.models import StrategyConfig
 from app.backtest.models import BacktestConfig, BacktestRun, PortfolioSnapshot, SimulatedTrade, PerformanceMetric
 from app.backtest.engine import BacktestEngine
 
@@ -21,8 +22,21 @@ class BacktestConfigRequest(BaseModel):
 
 @router.post("/run")
 def run_backtest(req: BacktestConfigRequest, db: Session = Depends(get_db)):
+    # Look up or create strategy config
+    strat_cfg = db.execute(
+        select(StrategyConfig).where(StrategyConfig.id == req.strategy_config_id)
+    ).scalar_one_or_none()
+    if not strat_cfg:
+        strat_cfg = StrategyConfig(
+            name="risk_aware_etf_rotation_v1", version="v1",
+            parameters={"max_holdings": 5, "max_concentration": 0.30,
+                       "min_positions": 3, "max_turnover": 0.50},
+        )
+        db.add(strat_cfg)
+        db.flush()
+
     config = BacktestConfig(
-        strategy_config_id=req.strategy_config_id,
+        strategy_config_id=strat_cfg.id,
         start_date=date_type.fromisoformat(req.start_date),
         end_date=date_type.fromisoformat(req.end_date),
         initial_capital=req.initial_capital,

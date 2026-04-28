@@ -3,7 +3,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
+from datetime import date
 from app.db.base import get_db
+from app.strategy.models import StrategyConfig
+from app.backtest.models import BacktestConfig
 from app.audit.models import AuditRun, AuditCheckResult
 from app.audit.grading import AuditGrader
 
@@ -17,8 +20,31 @@ class AuditRequest(BaseModel):
 
 @router.post("/run")
 def run_audit(req: AuditRequest, db: Session = Depends(get_db)):
+    # Look up or create strategy config
+    strat_cfg = db.execute(
+        select(StrategyConfig).where(StrategyConfig.id == req.strategy_config_id)
+    ).scalar_one_or_none()
+    if not strat_cfg:
+        strat_cfg = StrategyConfig(name="risk_aware_etf_rotation_v1", version="v1")
+        db.add(strat_cfg)
+        db.flush()
+
+    # Look up or create backtest config
+    btc = db.execute(
+        select(BacktestConfig).where(BacktestConfig.id == req.backtest_config_id)
+    ).scalar_one_or_none()
+    if not btc:
+        btc = BacktestConfig(
+            strategy_config_id=strat_cfg.id,
+            start_date=date.today().replace(year=date.today().year - 1),
+            end_date=date.today(),
+            initial_capital=100000.0,
+        )
+        db.add(btc)
+        db.flush()
+
     grader = AuditGrader(db)
-    audit = grader.run_audit(req.strategy_config_id, req.backtest_config_id)
+    audit = grader.run_audit(strat_cfg.id, btc.id)
     db.commit()
     return {
         "audit_id": audit.id,
