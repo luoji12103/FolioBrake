@@ -34,6 +34,7 @@ def run_backtest(req: BacktestConfigRequest, db: Session = Depends(get_db)):
 
     engine = BacktestEngine(db)
     run = engine.run(config)
+    db.commit()
     return {"run_id": run.id, "status": run.status, "config_hash": run.config_hash}
 
 

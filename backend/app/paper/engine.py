@@ -13,6 +13,7 @@ class PaperTradingEngine:
     def create_portfolio(self, name: str, capital: float) -> PaperPortfolio:
         pf = PaperPortfolio(name=name, initial_capital=capital)
         self.db.add(pf)
+        self.db.flush()  # populate pf.id
         self.db.add(PaperLedger(portfolio_id=pf.id, date=date.today(),
                                 entry_type="DEPOSIT", amount=capital,
                                 description=f"Initial capital: {capital}"))

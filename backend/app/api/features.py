@@ -36,6 +36,7 @@ def compute_features(req: ComputeRequest, db: Session = Depends(get_db)):
     registry = FeatureRegistry(db)
     as_of = date_type.fromisoformat(req.as_of_date)
     features = registry.compute_all(req.instrument_id, as_of)
+    db.commit()
     return {"instrument_id": req.instrument_id, "as_of_date": req.as_of_date, "features": features}
 
 

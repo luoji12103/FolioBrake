@@ -27,6 +27,7 @@ class ApplySignalRequest(BaseModel):
 def create_portfolio(req: CreatePortfolioRequest, db: Session = Depends(get_db)):
     engine = PaperTradingEngine(db)
     pf = engine.create_portfolio(req.name, req.initial_capital)
+    db.commit()
     return {"portfolio_id": pf.id, "name": pf.name, "initial_capital": pf.initial_capital}
 
 
@@ -35,6 +36,7 @@ def apply_signal(req: ApplySignalRequest, db: Session = Depends(get_db)):
     engine = PaperTradingEngine(db)
     weights = {int(k): float(v) for k, v in req.target_weights.items()}
     orders = engine.apply_signal(req.portfolio_id, date_type.fromisoformat(req.signal_date), weights)
+    db.commit()
     return {"applied": len(orders), "orders": [{"instrument_id": o.instrument_id, "side": o.side,
             "quantity": o.quantity, "price": o.price} for o in orders]}
 

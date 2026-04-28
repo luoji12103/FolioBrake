@@ -43,6 +43,7 @@ def run_strategy(req: RunRequest, db: Session = Depends(get_db)):
     strategy = RiskAwareETFRotationV1(db, config)
     as_of = date_type.fromisoformat(req.as_of_date)
     result = strategy.generate_signals(universe, as_of)
+    db.commit()
     return {"run_id": result["run_id"], "portfolio_count": len(result["portfolio"])}
 
 

@@ -56,12 +56,13 @@ export function useHealth() {
 // ---------------------------------------------------------------------------
 
 export interface Instrument {
+  id: number;
   symbol: string;
   name: string;
   exchange: string;
-  category: string;
-  last_bar_date: string | null;
-  quality_status: "OK" | "WARNING" | "ERROR";
+  type: string;
+  category: string | null;
+  created_at: string;
 }
 
 export function useInstruments() {

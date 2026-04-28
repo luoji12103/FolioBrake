@@ -2,19 +2,6 @@ import { useState } from "react";
 import { useInstruments, Instrument } from "../api/hooks";
 import "./shared.css";
 
-/* ---- Badge helpers ---- */
-
-function QualityBadge({ status }: { status: Instrument["quality_status"] }) {
-  const map: Record<string, string> = {
-    OK: "badge-ok",
-    WARNING: "badge-warning",
-    ERROR: "badge-error",
-  };
-  return (
-    <span className={`badge ${map[status] || "badge-ok"}`}>{status}</span>
-  );
-}
-
 function formatDate(d: string | null): string {
   if (!d) return "N/A";
   const dt = new Date(d);
@@ -25,8 +12,6 @@ function formatDate(d: string | null): string {
     day: "2-digit",
   });
 }
-
-/* ---- Skeleton row ---- */
 
 function SkeletonRow() {
   return (
@@ -41,13 +26,11 @@ function SkeletonRow() {
   );
 }
 
-/* ---- Universe table ---- */
-
 function UniverseTable({ instruments }: { instruments: Instrument[] }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
-  const categories = Array.from(new Set(instruments.map((i) => i.category))).sort();
+  const categories = Array.from(new Set(instruments.map((i) => i.category))).filter(Boolean).sort() as string[];
 
   const filtered = instruments.filter((i) => {
     const matchSearch =
@@ -60,11 +43,7 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
 
   return (
     <>
-      {/* Filters */}
-      <div
-        className="grid-col-2"
-        style={{ marginBottom: 16, maxWidth: 500 }}
-      >
+      <div className="grid-col-2" style={{ marginBottom: 16, maxWidth: 500 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label htmlFor="uni-search">Search</label>
           <input
@@ -85,30 +64,18 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
           >
             <option value="">All Categories</option>
             {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Count */}
-      <p
-        style={{
-          fontSize: 13,
-          color: "var(--color-text-muted)",
-          marginBottom: 12,
-        }}
-      >
+      <p style={{ fontSize: 13, color: "var(--color-text-muted)", marginBottom: 12 }}>
         {filtered.length} of {instruments.length} instruments
       </p>
 
-      {/* Table */}
       {filtered.length === 0 ? (
-        <div className="state-banner state-empty">
-          No instruments match your filters.
-        </div>
+        <div className="state-banner state-empty">No instruments match your filters.</div>
       ) : (
         <div className="table-wrap">
           <table>
@@ -117,9 +84,9 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
                 <th>Symbol</th>
                 <th>Name</th>
                 <th>Exchange</th>
+                <th>Type</th>
                 <th>Category</th>
-                <th>Last Bar Date</th>
-                <th>Quality</th>
+                <th>Created</th>
               </tr>
             </thead>
             <tbody>
@@ -128,11 +95,9 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
                   <td style={{ fontWeight: 600 }}>{inst.symbol}</td>
                   <td>{inst.name}</td>
                   <td>{inst.exchange}</td>
-                  <td>{inst.category}</td>
-                  <td>{formatDate(inst.last_bar_date)}</td>
-                  <td>
-                    <QualityBadge status={inst.quality_status} />
-                  </td>
+                  <td><span className="badge badge-ok">{inst.type}</span></td>
+                  <td>{inst.category || "N/A"}</td>
+                  <td>{formatDate(inst.created_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -143,19 +108,13 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
   );
 }
 
-/* ---- Skeleton ---- */
-
 function UniverseSkeleton() {
   return (
     <div style={{ marginTop: 16 }}>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <SkeletonRow key={i} />
-      ))}
+      {Array.from({ length: 8 }).map((_, i) => (<SkeletonRow key={i} />))}
     </div>
   );
 }
-
-/* ---- Page ---- */
 
 function Universe() {
   const { data: instruments, error, isLoading } = useInstruments();
@@ -173,9 +132,7 @@ function Universe() {
       )}
 
       {!isLoading && !error && instruments && instruments.length === 0 && (
-        <div className="state-banner state-empty">
-          No instruments found in the universe.
-        </div>
+        <div className="state-banner state-empty">No instruments found in the universe.</div>
       )}
 
       {!isLoading && !error && instruments && instruments.length > 0 && (

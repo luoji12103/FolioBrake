@@ -19,6 +19,7 @@ class AuditRequest(BaseModel):
 def run_audit(req: AuditRequest, db: Session = Depends(get_db)):
     grader = AuditGrader(db)
     audit = grader.run_audit(req.strategy_config_id, req.backtest_config_id)
+    db.commit()
     return {
         "audit_id": audit.id,
         "grade": audit.grade,

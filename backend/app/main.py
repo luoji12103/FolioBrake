@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.data import router as data_router
 from app.api.features import router as features_router
@@ -9,6 +10,14 @@ from app.api.audit import router as audit_router
 from app.api.paper import router as paper_router
 
 app = FastAPI(title="Retail ETF Guardian API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:1420", "http://localhost:5173", "tauri://localhost"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(data_router, prefix="/data", tags=["data"])
 app.include_router(features_router, prefix="/features", tags=["features"])
