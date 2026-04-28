@@ -79,6 +79,12 @@ class DataSyncService:
 
         records = self.adapter.fetch_etf_daily(inst.symbol, start, end)
         if not records:
+            from app.data.efinance_adapter import EfinanceAdapter
+            ef_adapter = EfinanceAdapter()
+            records = ef_adapter.fetch_etf_daily(inst.symbol, start, end)
+            if records:
+                logger.info("Using efinance fallback for %s", inst.symbol)
+        if not records:
             return 0
 
         inserted = 0
