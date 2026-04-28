@@ -32,7 +32,11 @@ def compute_cagr(equity: list[float], days: int) -> float:
         return 0.0
     total_return = (equity[-1] - equity[0]) / equity[0]
     years = days / 252
-    return float((1 + total_return) ** (1 / years) - 1) if years > 0 else 0.0
+    if years <= 0:
+        return 0.0
+    # Guard against negative equity causing complex roots
+    base = max(1 + total_return, 0.0001)
+    return float(base ** (1 / years) - 1)
 
 
 def compute_win_rate(trades: list[dict]) -> float:

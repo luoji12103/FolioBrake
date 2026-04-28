@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../api/client";
+import { EquityChart, DrawdownChart } from "../components/Charts";
 import "./shared.css";
 
 function Backtest() {
@@ -21,6 +22,14 @@ function Backtest() {
       setResults(res.data);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
+  };
+
+  const computeDrawdown = (equity: { date: string; total_value: number }[]) => {
+    let peak = equity[0]?.total_value || 0;
+    return equity.map(p => {
+      peak = Math.max(peak, p.total_value);
+      return { date: p.date, drawdown: ((p.total_value - peak) / peak) * 100 };
+    });
   };
 
   return (
@@ -64,9 +73,19 @@ function Backtest() {
             ))}
           </div>
           {results.equity_curve && results.equity_curve.length > 0 && (
-            <p style={{color: 'var(--color-text-muted)', marginTop: 8}}>
-              {results.equity_curve.length} weekly snapshots, {results.trades?.length || 0} trades
-            </p>
+            <>
+              <div className="card" style={{ marginTop: 16 }}>
+                <h3>Equity Curve</h3>
+                <EquityChart data={results.equity_curve} />
+              </div>
+              <div className="card" style={{ marginTop: 16 }}>
+                <h3>Drawdown</h3>
+                <DrawdownChart data={computeDrawdown(results.equity_curve)} />
+              </div>
+              <p style={{ color: 'var(--color-text-muted)', marginTop: 8 }}>
+                {results.equity_curve.length} weekly snapshots, {results.trades?.length || 0} trades
+              </p>
+            </>
           )}
         </div>
       )}
