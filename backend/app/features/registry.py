@@ -2,6 +2,7 @@ import hashlib
 import json
 from datetime import date
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.features.models import FeatureDefinition, FeatureValue, FeatureRun
@@ -73,14 +74,17 @@ class FeatureRegistry:
                 all_features.update(compute_liquidity_features(d.name, volumes, dates, d.parameters))
 
         for d in definitions:
-            fv = FeatureValue(
+            stmt = pg_insert(FeatureValue).values(
                 instrument_id=instrument_id,
                 feature_definition_id=d.id,
                 date=as_of_date,
                 value=all_features.get(d.name, 0.0),
                 config_hash=config_hash,
+            ).on_conflict_do_update(
+                index_elements=["instrument_id", "feature_definition_id", "date", "config_hash"],
+                set_={"value": all_features.get(d.name, 0.0)},
             )
-            self.db.add(fv)
+            self.db.execute(stmt)
 
         run = FeatureRun(
             config_hash=config_hash,
