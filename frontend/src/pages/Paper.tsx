@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ErrorMessage } from "../components/ErrorMessage";
 import { usePaperHoldings, usePaperPnl, PaperHolding } from "../api/hooks";
 import "./shared.css";
 
@@ -251,11 +252,13 @@ function Paper() {
     data: holdings,
     error: holdingsErr,
     isLoading: holdingsLoading,
+    refetch: refetchHoldings,
   } = usePaperHoldings(portfolioId);
   const {
     data: pnl,
     error: pnlErr,
     isLoading: pnlLoading,
+    refetch: refetchPnl,
   } = usePaperPnl(portfolioId);
 
   const isLoading = holdingsLoading || pnlLoading;
@@ -268,9 +271,10 @@ function Paper() {
       {isLoading && <PaperSkeleton />}
 
       {error && (
-        <div className="state-banner state-error">
-          <span>Failed to load portfolio data: {error}</span>
-        </div>
+        <ErrorMessage
+          message={`Failed to load portfolio data: ${error}`}
+          onRetry={() => { refetchHoldings(); refetchPnl(); }}
+        />
       )}
 
       {!isLoading && !error && !pnl && !holdings && (

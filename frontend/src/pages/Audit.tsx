@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ErrorMessage } from "../components/ErrorMessage";
 import api from "../api/client";
 import "./shared.css";
 
@@ -26,7 +27,7 @@ function Audit() {
         {loading ? "Running..." : "Run Audit"}
       </button>
 
-      {error && <div className="state-banner state-error">Error: {error}</div>}
+      {error && <ErrorMessage message={error} onRetry={handleRun} />}
       {!result && !loading && !error && <div className="state-banner state-empty">Run an audit to validate strategy robustness.</div>}
 
       {result && (

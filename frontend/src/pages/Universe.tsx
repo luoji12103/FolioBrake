@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ErrorMessage } from "../components/ErrorMessage";
 import { useInstruments, Instrument } from "../api/hooks";
 import "./shared.css";
 
@@ -117,7 +118,7 @@ function UniverseSkeleton() {
 }
 
 function Universe() {
-  const { data: instruments, error, isLoading } = useInstruments();
+  const { data: instruments, error, isLoading, refetch } = useInstruments();
 
   return (
     <div className="page">
@@ -125,11 +126,7 @@ function Universe() {
 
       {isLoading && <UniverseSkeleton />}
 
-      {error && (
-        <div className="state-banner state-error">
-          <span>Failed to load instruments: {error}</span>
-        </div>
-      )}
+      {error && <ErrorMessage message={`Failed to load instruments: ${error}`} onRetry={refetch} />}
 
       {!isLoading && !error && instruments && instruments.length === 0 && (
         <div className="state-banner state-empty">No instruments found in the universe.</div>

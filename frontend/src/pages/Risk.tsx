@@ -1,4 +1,5 @@
 import { useRiskState, useRiskRules, useRiskOverlay, RiskLevel } from "../api/hooks";
+import { ErrorMessage } from "../components/ErrorMessage";
 import RiskBadge from "../components/RiskBadge";
 import "./shared.css";
 
@@ -77,7 +78,7 @@ function RiskSkeleton() {
 /* ---- Page ---- */
 
 function Risk() {
-  const { data: riskState, error: stateErr, isLoading: stateLoading } = useRiskState();
+  const { data: riskState, error: stateErr, isLoading: stateLoading, refetch: refetchRisk } = useRiskState();
   const { data: rules, error: rulesErr, isLoading: rulesLoading } = useRiskRules();
   const { data: overlay, error: overlayErr, isLoading: overlayLoading } =
     useRiskOverlay();
@@ -91,11 +92,7 @@ function Risk() {
 
       {isLoading && <RiskSkeleton />}
 
-      {error && (
-        <div className="state-banner state-error">
-          <span>Failed to load risk data: {error}</span>
-        </div>
-      )}
+      {error && <ErrorMessage message={`Failed to load risk data: ${error}`} onRetry={refetchRisk} />}
 
       {!isLoading && !error && !riskState && (
         <div className="state-banner state-empty">
