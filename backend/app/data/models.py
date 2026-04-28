@@ -27,9 +27,6 @@ class Instrument(Base):
     quality_reports: Mapped[list["DataQualityReport"]] = relationship(
         "DataQualityReport", back_populates="instrument", lazy="selectin"
     )
-    feature_values: Mapped[list["FeatureValue"]] = relationship(
-        "FeatureValue", back_populates="instrument", lazy="selectin"
-    )
 
     def __repr__(self) -> str:
         return f"<Instrument(id={self.id}, symbol={self.symbol}, name={self.name})>"

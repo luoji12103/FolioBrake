@@ -1,7 +1,0 @@
-[
-  {"symbol": "510050", "name": "50ETF", "exchange": "SH", "category": "broad"},
-  {"symbol": "510300", "name": "300ETF", "exchange": "SH", "category": "broad"},
-  {"symbol": "510500", "name": "500ETF", "exchange": "SH", "category": "broad"},
-  {"symbol": "159919", "name": "300ETF", "exchange": "SZ", "category": "broad"},
-  {"symbol": "159915", "name": "创业板ETF", "exchange": "SZ", "category": "broad"}
-]

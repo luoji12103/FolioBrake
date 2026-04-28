@@ -98,6 +98,7 @@ def sync_data(
     for symbol in payload.symbols:
         try:
             inst = service.sync_instrument(symbol)
+            db.commit()  # persist instrument even if data fetch fails
             count = service.sync_daily_bars(
                 inst.id, payload.start_date, payload.end_date
             )

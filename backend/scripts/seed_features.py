@@ -1,4 +1,8 @@
 """Seed default feature definitions into the database."""
+from sqlalchemy import select
+
+# Import data models first so Instrument is registered before FeatureValue resolves it
+import app.data.models  # noqa: F401
 from app.features.models import FeatureDefinition
 from app.db.base import SessionLocal
 
@@ -23,10 +27,12 @@ FEATURES = [
 ]
 
 db = SessionLocal()
+count = 0
 for name, cat, lookback, params in FEATURES:
-    existing = db.query(FeatureDefinition).filter(FeatureDefinition.name == name).first()
+    existing = db.execute(select(FeatureDefinition).where(FeatureDefinition.name == name)).scalar_one_or_none()
     if not existing:
         db.add(FeatureDefinition(name=name, category=cat, lookback_days=lookback, parameters=params))
+        count += 1
 db.commit()
 db.close()
-print(f"Seeded {len(FEATURES)} feature definitions")
+print(f"Seeded {count} new feature definitions (total {len(FEATURES)})")

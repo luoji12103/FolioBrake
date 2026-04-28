@@ -31,7 +31,7 @@ class FeatureValue(Base):
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    instrument: Mapped["Instrument"] = relationship(back_populates="feature_values")
+    instrument: Mapped["Instrument"] = relationship(foreign_keys=[instrument_id])
     feature_definition: Mapped["FeatureDefinition"] = relationship()
 
 
