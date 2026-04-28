@@ -222,8 +222,19 @@ select.form-input {
 }
 
 .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
   background: var(--color-accent);
   color: #fff;
+  transition: all 0.15s;
 }
 
 .btn-primary:hover {
@@ -245,6 +256,13 @@ select.form-input {
 }
 
 /* Metrics grid */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -358,8 +376,17 @@ select.form-input {
   gap: 16px;
 }
 
+.grid-col-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
 @media (max-width: 768px) {
   .grid-col-2 {
+    grid-template-columns: 1fr;
+  }
+  .grid-col-3 {
     grid-template-columns: 1fr;
   }
   .metrics-grid {

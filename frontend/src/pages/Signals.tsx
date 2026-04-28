@@ -131,17 +131,21 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
     [signals]
   );
 
+  const hasName = sorted.some((s) => s.name);
+  const hasTargetWeight = sorted.some((s) => s.target_weight != null);
+  const hasAction = sorted.some((s) => s.action);
+
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
             <th>Symbol</th>
-            <th>Name</th>
+            {hasName && <th>Name</th>}
             <th>Score</th>
             <th>Rank</th>
-            <th>Target Weight</th>
-            <th>Action</th>
+            {hasTargetWeight && <th>Target Weight</th>}
+            {hasAction && <th>Action</th>}
             <th>Reason</th>
           </tr>
         </thead>
@@ -149,17 +153,21 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
           {sorted.map((s) => (
             <tr key={s.symbol}>
               <td style={{ fontWeight: 600 }}>{s.symbol}</td>
-              <td>{s.name}</td>
+              {hasName && <td>{s.name}</td>}
               <td>
                 <ScoreBar score={s.score} />
               </td>
               <td>#{s.rank}</td>
-              <td>
-                <WeightBar pct={s.target_weight} />
-              </td>
-              <td>
-                <ActionBadge action={s.action} />
-              </td>
+              {hasTargetWeight && (
+                <td>
+                  <WeightBar pct={s.target_weight} />
+                </td>
+              )}
+              {hasAction && (
+                <td>
+                  <ActionBadge action={s.action} />
+                </td>
+              )}
               <td style={{ maxWidth: 240, whiteSpace: "normal", fontSize: 13 }}>
                 {s.reason}
               </td>

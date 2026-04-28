@@ -226,7 +226,7 @@ function Risk() {
               </div>
             ) : (
               <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-                No rules have been triggered.
+                No rules triggered today.
               </p>
             )}
           </div>
