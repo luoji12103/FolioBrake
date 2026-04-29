@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import api from "../api/client";
 import { useSignals, usePortfolio, Signal } from "../api/hooks";
 import { WeightBarChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
@@ -128,6 +129,32 @@ function SignalDetails({ signals }: { signals: Signal[] }) {
 function Signals() {
   const { data: signals, error, isLoading, refetch } = useSignals();
   const { data: portfolio, isLoading: portfolioLoading, error: portfolioError } = usePortfolio();
+  const [paperId, setPaperId] = useState<number | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [applyMsg, setApplyMsg] = useState<string | null>(null);
+
+  const handleCreateAndApply = async () => {
+    setApplying(true); setApplyMsg(null);
+    try {
+      let pid = paperId;
+      if (!pid) {
+        const { data } = await api.post("/paper/portfolio", { name: "default", initial_capital: 100000 });
+        pid = data.portfolio_id;
+        setPaperId(pid);
+      }
+      if (!portfolio || portfolio.length === 0) {
+        setApplyMsg("No portfolio weights to apply.");
+        return;
+      }
+      const weights: Record<string, number> = {};
+      portfolio.forEach((p: any) => { weights[String(p.instrument_id)] = p.target_weight; });
+      const today = new Date().toISOString().slice(0, 10);
+      await api.post("/paper/apply-signal", { portfolio_id: pid, signal_date: today, target_weights: weights });
+      setApplyMsg(`Applied ${portfolio.length} positions to paper portfolio #${pid}.`);
+    } catch (e: any) {
+      setApplyMsg(`Error: ${e?.response?.data?.detail || e.message}`);
+    } finally { setApplying(false); }
+  };
 
   return (
     <div className="page">
@@ -151,17 +178,30 @@ function Signals() {
       )}
 
       {!portfolioLoading && !portfolioError && portfolio && portfolio.length > 0 && (
-        <div style={{ marginTop: 32 }}>
-          <h3 className="section-title">Portfolio Weights</h3>
-          <div className="card">
-            <WeightBarChart
-              data={portfolio.map((p) => ({
-                symbol: p.symbol,
-                target_weight: p.target_weight * 100,
-              }))}
-            />
+        <>
+          <div style={{ marginTop: 32 }}>
+            <h3 className="section-title">Portfolio Weights</h3>
+            <div className="card">
+              <WeightBarChart
+                data={portfolio.map((p) => ({
+                  symbol: p.symbol,
+                  target_weight: p.target_weight * 100,
+                }))}
+              />
+            </div>
           </div>
-        </div>
+          <div style={{ marginTop: 16 }}>
+            <h3 className="section-title">Paper Trading</h3>
+            <div className="card" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <button className="btn-primary" onClick={handleCreateAndApply} disabled={applying}>
+                {applying ? "Applying..." : (paperId ? `Apply to Portfolio #${paperId}` : "Create & Apply")}
+              </button>
+              <span style={{ fontSize: 13, color: applyMsg?.startsWith("Error") ? "var(--color-red)" : "var(--color-green)" }}>
+                {applyMsg}
+              </span>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
