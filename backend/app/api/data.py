@@ -127,6 +127,21 @@ def list_instruments(db: Session = Depends(get_db)) -> list[Instrument]:
     return list(db.execute(stmt).scalars().all())
 
 
+class AddInstrumentRequest(BaseModel):
+    symbol: str
+
+
+@router.post("/instruments", response_model=InstrumentOut)
+def add_instrument(req: AddInstrumentRequest, db: Session = Depends(get_db)):
+    """Add a new ETF instrument and sync its data."""
+    service = DataSyncService(db)
+    inst = service.sync_instrument(req.symbol)
+    db.commit()
+    service.sync_daily_bars(inst.id, "20220101", "20260427")
+    db.commit()
+    return inst
+
+
 @router.get("/bars/{symbol}", response_model=list[BarOut])
 def get_bars(
     symbol: str,

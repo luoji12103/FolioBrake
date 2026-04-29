@@ -1,4 +1,5 @@
 import { useState } from "react";
+import api from "../api/client";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { useInstruments, Instrument } from "../api/hooks";
 import "./shared.css";
@@ -119,10 +120,45 @@ function UniverseSkeleton() {
 
 function Universe() {
   const { data: instruments, error, isLoading, refetch } = useInstruments();
+  const [newSymbol, setNewSymbol] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addMsg, setAddMsg] = useState<string | null>(null);
+
+  const handleAdd = async () => {
+    if (!newSymbol.trim()) return;
+    setAdding(true); setAddMsg(null);
+    try {
+      await api.post("/data/instruments", { symbol: newSymbol.trim() });
+      setNewSymbol("");
+      setAddMsg(`Added ${newSymbol.trim()}. Syncing data...`);
+      refetch();
+    } catch (e: any) {
+      setAddMsg(`Error: ${e?.response?.data?.detail || e.message}`);
+    } finally { setAdding(false); }
+  };
 
   return (
     <div className="page">
       <h2>ETF Universe</h2>
+
+      <div className="card" style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+        <input
+          className="form-input"
+          style={{ maxWidth: 200 }}
+          placeholder="ETF symbol (e.g. 510880)"
+          value={newSymbol}
+          onChange={(e) => setNewSymbol(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        />
+        <button className="btn-primary" onClick={handleAdd} disabled={adding}>
+          {adding ? "Adding..." : "Add ETF"}
+        </button>
+        {addMsg && (
+          <span style={{ fontSize: 13, color: addMsg.startsWith("Error") ? "var(--color-red)" : "var(--color-green)" }}>
+            {addMsg}
+          </span>
+        )}
+      </div>
 
       {isLoading && <UniverseSkeleton />}
 
