@@ -54,7 +54,7 @@ app = FastAPI(title="Retail ETF Guardian API", version="0.1.0", lifespan=lifespa
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:1420", "http://localhost:5173", "tauri://localhost"],
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
