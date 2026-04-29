@@ -64,14 +64,14 @@ class BacktestEngine:
         trades = []
 
         for week_date in rebalance_dates:
-            # Price lookup for rebalance date
+            # Price lookup: use most recent trading day <= rebalance date
             prices = {}
             for inst in universe:
                 bar = self.db.execute(
                     select(DailyBar).where(
                         DailyBar.instrument_id == inst.id,
-                        DailyBar.trade_date == week_date,
-                    )
+                        DailyBar.trade_date <= week_date,
+                    ).order_by(DailyBar.trade_date.desc()).limit(1)
                 ).scalar_one_or_none()
                 if bar:
                     prices[inst.id] = bar.close
@@ -83,27 +83,33 @@ class BacktestEngine:
             result = strategy.generate_signals(universe, week_date)
             portfolio = result.get("portfolio", [])
 
-            # Compute current portfolio value
-            current_value = cash
+            # Compute current total portfolio value (cash + holdings at market)
+            total_value = cash
             for inst_id, shares in list(positions.items()):
                 if inst_id in prices:
-                    current_value += shares * prices[inst_id]
+                    total_value += shares * prices[inst_id]
 
-            # Execute rebalance
-            target_weights = {p["instrument_id"]: p["target_weight"] for p in portfolio if p["target_weight"] > 0}
-            new_positions: dict[int, float] = {}
-            for inst_id, target_w in target_weights.items():
+            # Liquidate old positions
+            for inst_id, shares in list(positions.items()):
                 if inst_id in prices:
-                    target_value = current_value * target_w
-                    cost_price = prices[inst_id] * (1 + SLIPPAGE_RATE)
-                    shares = target_value / cost_price if cost_price > 0 else 0
-                    if shares > 0:
-                        new_positions[inst_id] = shares
-                        day_cost = target_value * COMMISSION_RATE
-                        cash -= target_value + day_cost
+                    cash += shares * prices[inst_id]
+            positions.clear()
 
-            cash += current_value  # Add back proceeds from old positions
-            positions = new_positions
+            # Buy new positions
+            target_weights = {p["instrument_id"]: p["target_weight"] for p in portfolio if p["target_weight"] > 0}
+            for inst_id, target_w in target_weights.items():
+                if inst_id not in prices:
+                    continue
+                target_value = total_value * target_w
+                cost_price = prices[inst_id] * (1 + SLIPPAGE_RATE)
+                shares = target_value / cost_price if cost_price > 0 else 0
+                if shares <= 0:
+                    continue
+                cost = shares * cost_price
+                commission = cost * COMMISSION_RATE
+                if cash >= cost + commission:
+                    positions[inst_id] = shares
+                    cash -= cost + commission
 
             # Record snapshot
             new_value = cash
