@@ -16,6 +16,7 @@ from app.backtest.metrics import compute_sharpe, compute_max_drawdown, compute_c
 
 COMMISSION_RATE = 0.0003
 SLIPPAGE_RATE = 0.001
+MIN_CASH_BUFFER = 100.0  # Minimum cash to continue trading; below this, halt if no positions
 
 
 def _weekly_dates(start: date, end: date) -> list[date]:
@@ -62,6 +63,8 @@ class BacktestEngine:
         positions: dict[int, float] = {}  # instrument_id -> shares
         equity_curve = [config.initial_capital]
         trades = []
+        halted = False
+        halt_reason = ""
 
         for week_date in rebalance_dates:
             # Price lookup: use most recent trading day <= rebalance date
@@ -77,6 +80,13 @@ class BacktestEngine:
                     prices[inst.id] = bar.close
 
             if not prices:
+                continue
+
+            # Bankruptcy guard: if cash depleted and no positions, halt
+            if cash <= MIN_CASH_BUFFER and not positions:
+                if not halted:
+                    halted = True
+                    halt_reason = f"Bankrupt at {week_date}: cash ${cash:.2f} below buffer ${MIN_CASH_BUFFER:.0f}"
                 continue
 
             # Run strategy
@@ -95,7 +105,7 @@ class BacktestEngine:
                     cash += shares * prices[inst_id]
             positions.clear()
 
-            # Buy new positions
+            # Buy new positions (with cost guard)
             target_weights = {p["instrument_id"]: p["target_weight"] for p in portfolio if p["target_weight"] > 0}
             for inst_id, target_w in target_weights.items():
                 if inst_id not in prices:
@@ -160,10 +170,13 @@ class BacktestEngine:
             ("volatility", compute_volatility(returns)),
             ("win_rate", compute_win_rate(trades)),
         ]
+        if halted:
+            metrics.append(("halted", 1.0))
+
         for name, val in metrics:
             self.db.add(PerformanceMetric(run_id=run.id, metric_name=name, value=val))
 
-        run.status = "completed"
+        run.status = "halted" if halted else "completed"
         run.completed_at = datetime.utcnow()
         self.db.flush()
         return run
