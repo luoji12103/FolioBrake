@@ -1,14 +1,31 @@
 def apply_concentration_limit(portfolio: list[dict], max_weight: float = 0.30) -> list[dict]:
-    for p in portfolio:
-        if p["target_weight"] > max_weight:
-            excess = p["target_weight"] - max_weight
-            p["target_weight"] = max_weight
-            n_others = len(portfolio) - 1
-            if n_others > 0:
-                distrib = excess / n_others
-                for other in portfolio:
-                    if other.get("instrument_id") != p.get("instrument_id"):
-                        other["target_weight"] += distrib
+    """Cap all positions at max_weight, redistributing excess iteratively until convergence."""
+    if not portfolio:
+        return portfolio
+
+    for _ in range(20):  # safety limit
+        overflow = False
+        excess_pool = 0.0
+        eligible = []
+
+        for p in portfolio:
+            w = p["target_weight"]
+            if w > max_weight:
+                excess_pool += w - max_weight
+                p["target_weight"] = max_weight
+                overflow = True
+            elif w < max_weight:
+                eligible.append(p)
+
+        if not overflow:
+            break
+
+        # Redistribute excess proportionally among eligible positions
+        if eligible and excess_pool > 0:
+            total_eligible = sum(p["target_weight"] for p in eligible) or 1.0
+            for p in eligible:
+                p["target_weight"] += excess_pool * (p["target_weight"] / total_eligible)
+
     return portfolio
 
 

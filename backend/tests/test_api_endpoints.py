@@ -95,11 +95,11 @@ def test_constraint_concentration():
         {"instrument_id": 3, "target_weight": 0.20},
     ]
     result = apply_concentration_limit(portfolio, max_weight=0.30)
-    # Total weight should stay ~1.0
     total = sum(p["target_weight"] for p in result)
-    assert 0.99 <= total <= 1.01
-    # The originally overweight position should be reduced
-    assert result[0]["target_weight"] < 0.50
+    assert 0.85 <= total <= 1.01  # may be <1.0 when n*max_weight < 1.0
+    # All positions must be at or below max_weight after convergence
+    for p in result:
+        assert p["target_weight"] <= 0.30 + 0.0001  # float tolerance
 
 
 def test_constraint_turnover():
