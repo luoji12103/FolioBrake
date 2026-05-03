@@ -33,6 +33,21 @@ def create_portfolio(req: CreatePortfolioRequest, db: Session = Depends(get_db))
 
 @router.post("/apply-signal")
 def apply_signal(req: ApplySignalRequest, db: Session = Depends(get_db)):
+    # Gatekeeper: check latest audit grade
+    from app.audit.models import AuditRun
+    from sqlalchemy import desc
+
+    latest_audit = db.execute(
+        select(AuditRun).order_by(desc(AuditRun.id)).limit(1)
+    ).scalar_one_or_none()
+
+    if latest_audit and latest_audit.grade != "GREEN":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Audit gatekeeper blocked: latest audit grade is {latest_audit.grade}. "
+                   f"Run audit and achieve GREEN to enable paper trading.",
+        )
+
     engine = PaperTradingEngine(db)
     weights = {int(k): float(v) for k, v in req.target_weights.items()}
     orders = engine.apply_signal(req.portfolio_id, date_type.fromisoformat(req.signal_date), weights)
