@@ -78,12 +78,21 @@ class DataSyncService:
             raise ValueError(f"Instrument id={instrument_id} not found.")
 
         records = self.adapter.fetch_etf_daily(inst.symbol, start, end)
+        source = "akshare"
         if not records:
             from app.data.efinance_adapter import EfinanceAdapter
-            ef_adapter = EfinanceAdapter()
-            records = ef_adapter.fetch_etf_daily(inst.symbol, start, end)
+            records = EfinanceAdapter().fetch_etf_daily(inst.symbol, start, end)
             if records:
+                source = "efinance"
                 logger.info("Using efinance fallback for %s", inst.symbol)
+        if not records:
+            from app.data.tushare_adapter import TushareAdapter
+            ts_adapter = TushareAdapter()
+            if ts_adapter.available:
+                records = ts_adapter.fetch_etf_daily(inst.symbol, start, end)
+                if records:
+                    source = "tushare"
+                    logger.info("Using tushare fallback for %s", inst.symbol)
         if not records:
             return 0
 

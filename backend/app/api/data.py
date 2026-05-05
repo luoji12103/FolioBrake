@@ -200,6 +200,42 @@ def get_quality_report(
     return report
 
 
+@router.get("/sources")
+def get_data_sources(db: Session = Depends(get_db)):
+    """Return data source health status."""
+    sources = [
+        {"name": "efinance", "status": "available", "note": "Primary fallback, ETF fund quotes"},
+        {"name": "akshare", "status": "rate_limited", "note": "东方财富 API rate-limited"},
+    ]
+    from app.data.tushare_adapter import TushareAdapter
+    ts = TushareAdapter()
+    sources.append({
+        "name": "tushare",
+        "status": "available" if ts.available else "not_configured",
+        "note": "Requires TUSHARE_TOKEN env var" if not ts.available else "Token configured",
+    })
+
+    # Data freshness
+    from sqlalchemy import func
+    freshness = list(db.execute(
+        select(
+            Instrument.symbol,
+            func.max(DailyBar.trade_date).label("last_date"),
+            func.count(DailyBar.id).label("bar_count"),
+        )
+        .join(DailyBar, DailyBar.instrument_id == Instrument.id)
+        .group_by(Instrument.symbol)
+    ).all())
+
+    return {
+        "sources": sources,
+        "freshness": [
+            {"symbol": f.symbol, "last_date": str(f.last_date), "bar_count": f.bar_count}
+            for f in freshness
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
