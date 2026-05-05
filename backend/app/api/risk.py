@@ -5,6 +5,9 @@ from sqlalchemy import select, desc
 
 from app.db.base import get_db
 from app.risk.models import RiskStateRecord, RiskRuleResultRecord, RiskOverlayDecisionRecord
+from app.data.models import Instrument
+from app.risk.correlation import CorrelationMonitor
+from app.risk.var import compute_tail_metrics
 
 router = APIRouter(tags=["risk"])
 
@@ -49,3 +52,33 @@ def get_overlay(db: Session = Depends(get_db)):
         "final_targets": decision.final_targets,
         "suppressed_trades": decision.suppressed_trades,
     }
+
+
+@router.get("/correlation")
+def get_correlation(lookback: int = Query(default=60), db: Session = Depends(get_db)):
+    """Compute pairwise correlations for all universe ETFs."""
+    instruments = list(db.execute(select(Instrument)).scalars().all())
+    if len(instruments) < 2:
+        return {"matrix": [], "warnings": [], "note": "Need at least 2 instruments"}
+
+    from datetime import date as dt
+    monitor = CorrelationMonitor(db)
+    return monitor.compute_matrix([i.id for i in instruments], dt.today(), lookback)
+
+
+@router.get("/var")
+def get_var_metrics(backtest_run_id: int = Query(default=None), db: Session = Depends(get_db)):
+    """Compute VaR and tail risk metrics. If backtest_run_id provided, uses its equity curve."""
+    from app.backtest.models import PortfolioSnapshot
+
+    if backtest_run_id:
+        snaps = list(db.execute(
+            select(PortfolioSnapshot).where(PortfolioSnapshot.run_id == backtest_run_id).order_by(PortfolioSnapshot.date)
+        ).scalars().all())
+        if snaps:
+            equity = [s.total_value for s in snaps]
+            metrics = compute_tail_metrics(equity)
+            metrics["data_points"] = len(equity)
+            return metrics
+
+    return {"note": "Provide backtest_run_id to compute VaR from backtest equity curve"}
