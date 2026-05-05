@@ -195,6 +195,32 @@ function Settings() {
         </div>
       </div>
 
+      {/* Theme Toggle */}
+      <div className="card">
+        <div className="card-title">Appearance</div>
+        <div style={{ maxWidth: 500 }}>
+          <div className="form-group">
+            <label htmlFor="settings-theme">Theme</label>
+            <select
+              id="settings-theme"
+              className="form-input"
+              value={localStorage.getItem("folioBrake_theme") || "auto"}
+              onChange={(e) => {
+                const val = e.target.value;
+                localStorage.setItem("folioBrake_theme", val);
+                if (val === "light") document.documentElement.setAttribute("data-theme", "light");
+                else if (val === "dark") document.documentElement.setAttribute("data-theme", "dark");
+                else document.documentElement.removeAttribute("data-theme");
+              }}
+            >
+              <option value="auto">System (Auto)</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Save */}
       <div
         style={{
