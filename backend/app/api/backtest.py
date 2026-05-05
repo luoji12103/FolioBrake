@@ -89,4 +89,68 @@ def get_results(run_id: int, db: Session = Depends(get_db)):
 
 @router.get("/compare/{run_id}")
 def compare_benchmark(run_id: int, db: Session = Depends(get_db)):
-    return {"run_id": run_id, "note": "Benchmark comparison available after Phase 9 reports"}
+    """Compare backtest run vs a second run or benchmark."""
+    run = db.execute(select(BacktestRun).where(BacktestRun.id == run_id)).scalar_one_or_none()
+    if not run:
+        return {"error": "Run not found"}
+
+    # Get strategy A equity
+    snaps_a = list(db.execute(
+        select(PortfolioSnapshot).where(PortfolioSnapshot.run_id == run_id).order_by(PortfolioSnapshot.date)
+    ).scalars().all())
+    equity_a = [{"date": str(s.date), "total_value": s.total_value} for s in snaps_a]
+
+    # Get metrics
+    metrics = list(db.execute(
+        select(PerformanceMetric).where(PerformanceMetric.run_id == run_id)
+    ).scalars().all())
+    metrics_dict = {m.metric_name: m.value for m in metrics}
+
+    return {
+        "run_id": run_id,
+        "equity_curve": equity_a,
+        "metrics": metrics_dict,
+        "note": "For A/B comparison, run two backtests and compare their metrics",
+    }
+
+
+class CompareRequest(BaseModel):
+    run_id_a: int
+    run_id_b: int
+
+
+@router.post("/compare")
+def compare_runs(req: CompareRequest, db: Session = Depends(get_db)):
+    """Compare two backtest runs side by side."""
+    run_a = db.execute(select(BacktestRun).where(BacktestRun.id == req.run_id_a)).scalar_one_or_none()
+    run_b = db.execute(select(BacktestRun).where(BacktestRun.id == req.run_id_b)).scalar_one_or_none()
+
+    if not run_a or not run_b:
+        return {"error": "One or both runs not found"}
+
+    def get_metrics(rid): return {m.metric_name: m.value for m in db.execute(
+        select(PerformanceMetric).where(PerformanceMetric.run_id == rid)
+    ).scalars().all()}
+
+    m_a = get_metrics(req.run_id_a)
+    m_b = get_metrics(req.run_id_b)
+
+    comparison = {}
+    for key in set(list(m_a.keys()) + list(m_b.keys())):
+        va, vb = m_a.get(key, 0), m_b.get(key, 0)
+        comparison[key] = {
+            "A": va, "B": vb,
+            "delta": va - vb,
+            "winner": "A" if va > vb else "B" if vb > va else "tie",
+        }
+
+    return {
+        "run_id_a": req.run_id_a,
+        "run_id_b": req.run_id_b,
+        "comparison": comparison,
+        "summary": {
+            "a_wins": sum(1 for v in comparison.values() if v["winner"] == "A"),
+            "b_wins": sum(1 for v in comparison.values() if v["winner"] == "B"),
+            "ties": sum(1 for v in comparison.values() if v["winner"] == "tie"),
+        },
+    }
