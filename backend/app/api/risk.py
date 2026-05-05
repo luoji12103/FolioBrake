@@ -22,6 +22,19 @@ def get_risk_state(db: Session = Depends(get_db)):
     return {"date": str(state.date), "state": state.state, "transition_reason": state.transition_reason}
 
 
+@router.get("/state-history")
+def get_state_history(db: Session = Depends(get_db)):
+    """Return last 50 risk state transitions for timeline visualization."""
+    states = list(db.execute(
+        select(RiskStateRecord).order_by(RiskStateRecord.date.desc()).limit(50)
+    ).scalars().all())
+    STATE_MAP = {"NORMAL": 0, "CAUTION": 1, "DEFENSIVE": 2, "HALT": 3}
+    return [
+        {"date": str(s.date), "state": s.state, "state_code": STATE_MAP.get(s.state, 0), "reason": s.transition_reason}
+        for s in reversed(states)
+    ]
+
+
 @router.get("/rules")
 def get_rules(date: str = Query(None), db: Session = Depends(get_db)):
     q = select(RiskRuleResultRecord)

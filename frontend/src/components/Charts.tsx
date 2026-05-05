@@ -78,3 +78,61 @@ export function WeightBarChart({ data }: WeightBarChartProps) {
     </ResponsiveContainer>
   );
 }
+
+interface RollingMetric {
+  date: string;
+  sharpe: number;
+  volatility: number;
+  max_drawdown: number;
+}
+
+export function RollingMetricsChart({ data }: { data: RollingMetric[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={250}>
+      <AreaChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+        <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={11} tickLine={false} />
+        <YAxis stroke="var(--color-text-muted)" fontSize={11} tickLine={false} />
+        <Tooltip content={<CustomTooltip />} />
+        <Area type="monotone" dataKey="sharpe" name="Sharpe" stroke="#4f8cff" fill="#4f8cff10" strokeWidth={2} />
+        <Area type="monotone" dataKey="volatility" name="Volatility" stroke="#fbbf24" fill="none" strokeWidth={1} strokeDasharray="4 4" />
+        <Area type="monotone" dataKey="max_drawdown" name="Max DD" stroke="#f87171" fill="none" strokeWidth={1} />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+interface RiskTimelinePoint {
+  date: string;
+  state: number;  // 0=NORMAL, 1=CAUTION, 2=DEFENSIVE, 3=HALT
+}
+
+const RISK_COLORS: Record<number, string> = { 0: "#34d399", 1: "#fbbf24", 2: "#f97316", 3: "#f87171" };
+const RISK_LABELS: Record<number, string> = { 0: "NORMAL", 1: "CAUTION", 2: "DEFENSIVE", 3: "HALT" };
+
+export function RiskTimelineChart({ data }: { data: RiskTimelinePoint[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={120}>
+      <BarChart data={data} barCategoryGap={0}>
+        <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={10} tickLine={false} />
+        <Tooltip
+          content={({ active, payload, label }) => {
+            if (!active || !payload?.length) return null;
+            const state = payload[0]?.value as number;
+            return (
+              <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+                <div style={{ color: "var(--color-text-muted)" }}>{label}</div>
+                <div style={{ color: RISK_COLORS[state] || "#8b8fa3", fontWeight: 600 }}>{RISK_LABELS[state] || "UNKNOWN"}</div>
+              </div>
+            );
+          }}
+        />
+        <Bar dataKey="state" fill="#4f8cff" radius={[2, 2, 0, 0]}>
+          {data.map((_, i) => (
+            <rect key={i} fill={RISK_COLORS[data[i].state] || "#4f8cff"} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}

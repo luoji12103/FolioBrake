@@ -1,6 +1,7 @@
 import { useRiskState, useRiskRules, useRiskOverlay, RiskLevel } from "../api/hooks";
 import { ErrorMessage } from "../components/ErrorMessage";
 import RiskBadge from "../components/RiskBadge";
+import { RiskTimelineChart } from "../components/Charts";
 import "./shared.css";
 
 /* ---- Severity badge ---- */
