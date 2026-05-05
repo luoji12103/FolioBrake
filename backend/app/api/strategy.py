@@ -121,3 +121,33 @@ def get_explanations(run_id: int, db: Session = Depends(get_db)):
          "score_breakdown": l.score_breakdown}
         for l in logs
     ]
+
+
+@router.get("/sector-breakdown")
+def sector_breakdown(run_id: int = Query(None), db: Session = Depends(get_db)):
+    """Return portfolio exposure by ETF category/sector."""
+    if run_id:
+        positions = list(db.execute(
+            select(TargetPortfolio).where(TargetPortfolio.run_id == run_id)
+        ).scalars().all())
+    else:
+        latest_run = db.execute(
+            select(StrategyRun).order_by(desc(StrategyRun.id)).limit(1)
+        ).scalar_one_or_none()
+        if not latest_run:
+            return {"sectors": [], "note": "No strategy run yet"}
+        positions = list(db.execute(
+            select(TargetPortfolio).where(TargetPortfolio.run_id == latest_run.id)
+        ).scalars().all())
+
+    instruments = {i.id: i for i in db.execute(select(Instrument)).scalars().all()}
+    sectors: dict[str, float] = {}
+    for p in positions:
+        inst = instruments.get(p.instrument_id)
+        cat = inst.category if inst and inst.category else "uncategorized"
+        sectors[cat] = sectors.get(cat, 0.0) + p.target_weight
+
+    return {
+        "sectors": [{"category": k, "weight": round(v, 4)} for k, v in sectors.items()],
+        "run_id": run_id,
+    }

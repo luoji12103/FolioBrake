@@ -60,3 +60,27 @@ def apply_max_drawdown_check(portfolio: list[dict], instrument_drawdowns: dict,
         if dd < max_dd:
             p["target_weight"] = 0.0
     return portfolio
+
+
+def apply_sector_exposure_limit(
+    portfolio: list[dict],
+    instruments: list,
+    max_sector_exposure: float = 0.50,
+) -> list[dict]:
+    """Cap total weight per sector/category at max_sector_exposure."""
+    inst_map = {i.id: i for i in instruments}
+    sectors: dict[str, float] = {}
+    for p in portfolio:
+        inst = inst_map.get(p["instrument_id"])
+        cat = inst.category if inst and inst.category else "uncategorized"
+        sectors[cat] = sectors.get(cat, 0.0) + p["target_weight"]
+
+    for cat, total in sectors.items():
+        if total > max_sector_exposure:
+            scale = max_sector_exposure / total
+            for p in portfolio:
+                inst = inst_map.get(p["instrument_id"])
+                if inst and (inst.category or "uncategorized") == cat:
+                    p["target_weight"] *= scale
+
+    return portfolio
