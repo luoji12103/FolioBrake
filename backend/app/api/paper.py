@@ -31,6 +31,38 @@ def create_portfolio(req: CreatePortfolioRequest, db: Session = Depends(get_db))
     return {"portfolio_id": pf.id, "name": pf.name, "initial_capital": pf.initial_capital}
 
 
+@router.get("/portfolios")
+def list_portfolios(db: Session = Depends(get_db)):
+    """List all paper portfolios."""
+    portfolios = list(db.execute(
+        select(PaperPortfolio).order_by(PaperPortfolio.id)
+    ).scalars().all())
+    return [{"id": p.id, "name": p.name, "initial_capital": p.initial_capital, "created_at": str(p.created_at)} for p in portfolios]
+
+
+@router.get("/portfolios/{portfolio_id}")
+def get_portfolio(portfolio_id: int, db: Session = Depends(get_db)):
+    """Get a single paper portfolio."""
+    pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == portfolio_id)).scalar_one_or_none()
+    if not pf:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    from app.paper.engine import PaperTradingEngine
+    engine = PaperTradingEngine(db)
+    pnl = engine.get_pnl(portfolio_id)
+    return {"id": pf.id, "name": pf.name, "initial_capital": pf.initial_capital, "pnl": pnl, "created_at": str(pf.created_at)}
+
+
+@router.put("/portfolios/{portfolio_id}")
+def rename_portfolio(portfolio_id: int, name: str = Query(...), db: Session = Depends(get_db)):
+    """Rename a paper portfolio."""
+    pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == portfolio_id)).scalar_one_or_none()
+    if not pf:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    pf.name = name
+    db.commit()
+    return {"portfolio_id": pf.id, "name": pf.name}
+
+
 @router.post("/apply-signal")
 def apply_signal(req: ApplySignalRequest, db: Session = Depends(get_db)):
     # Gatekeeper: check latest audit grade
