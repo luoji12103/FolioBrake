@@ -8,6 +8,7 @@ from app.db.base import get_db
 from app.strategy.models import StrategyConfig, StrategyRun, Signal, TargetPortfolio, ExplanationLog
 from app.strategy.rotation import RiskAwareETFRotationV1
 from app.data.models import Instrument
+from app.risk.models import RiskStateRecord
 
 router = APIRouter(tags=["strategy"])
 
@@ -42,9 +43,28 @@ def run_strategy(req: RunRequest, db: Session = Depends(get_db)):
 
     strategy = RiskAwareETFRotationV1(db, config)
     as_of = date_type.fromisoformat(req.as_of_date)
+
+    # Evaluate risk state and scale exposure
+    from app.risk.daily_check import get_risk_scale
+    risk_scale = get_risk_scale(db, as_of)
+    risk_state = db.execute(
+        select(RiskStateRecord).order_by(desc(RiskStateRecord.date)).limit(1)
+    ).scalar_one_or_none()
+
     result = strategy.generate_signals(universe, as_of)
+
+    # Apply risk scaling to portfolio weights
+    if risk_scale < 1.0 and "portfolio" in result:
+        for p in result["portfolio"]:
+            p["target_weight"] *= risk_scale
+
     db.commit()
-    return {"run_id": result["run_id"], "portfolio_count": len(result["portfolio"])}
+    return {
+        "run_id": result["run_id"],
+        "portfolio_count": len(result.get("portfolio", [])),
+        "risk_state": risk_state.state if risk_state else "NORMAL",
+        "risk_scale": risk_scale,
+    }
 
 
 @router.get("/signals")
