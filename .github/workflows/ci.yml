@@ -19,7 +19,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U guardian -d guardian"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -28,10 +28,48 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install deps
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y libpq-dev
+      - name: Install Python deps
         run: cd backend && pip install -e ".[dev]"
+      - name: Create alembic.ini
+        run: |
+          cat > backend/alembic.ini << 'EOF'
+          [alembic]
+          script_location = app/db/migrations
+          sqlalchemy.url = postgresql+psycopg://guardian:guardian@localhost:5432/guardian
+          [loggers]
+          keys = root,sqlalchemy,alembic
+          [handlers]
+          keys = console
+          [formatters]
+          keys = generic
+          [logger_root]
+          level = WARN
+          handlers = console
+          [logger_sqlalchemy]
+          level = WARN
+          handlers =
+          qualname = sqlalchemy.engine
+          [logger_alembic]
+          level = INFO
+          handlers =
+          qualname = alembic
+          [handler_console]
+          class = StreamHandler
+          args = (sys.stderr,)
+          level = NOTSET
+          formatter = generic
+          [formatter_generic]
+          format = %(levelname)-5.5s [%(name)s] %(message)s
+          datefmt = %H:%M:%S
+          EOF
+      - name: Run migrations
+        run: cd backend && alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+psycopg://guardian:guardian@localhost:5432/guardian
       - name: Run tests
-        run: cd backend && DATABASE_URL=postgresql+psycopg://guardian:guardian@localhost:5432/guardian pytest -v
+        run: cd backend && pytest -v --tb=short
         env:
           DATABASE_URL: postgresql+psycopg://guardian:guardian@localhost:5432/guardian
 
