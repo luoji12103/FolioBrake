@@ -4,8 +4,8 @@ import {
 } from "recharts";
 
 interface EquityChartProps {
-  data: { date: string; total_value: number }[];
-  benchmarkData?: { date: string; total_value: number }[];
+  data: { date: string; value: number }[];
+  benchmarkData?: { date: string; value: number }[];
 }
 
 function CustomTooltip({ active, payload, label }: any) {
@@ -23,7 +23,7 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export function EquityChart({ data, benchmarkData }: EquityChartProps) {
-  const startValue = data[0]?.total_value || 100000;
+  const startValue = data[0]?.value || 100000;
   return (
     <ResponsiveContainer width="100%" height={350}>
       <AreaChart data={data}>
@@ -32,9 +32,9 @@ export function EquityChart({ data, benchmarkData }: EquityChartProps) {
         <YAxis stroke="var(--color-text-muted)" fontSize={11} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
         <Tooltip content={<CustomTooltip />} />
         <ReferenceLine y={startValue} stroke="var(--color-text-muted)" strokeDasharray="5 5" strokeWidth={1} />
-        <Area type="monotone" dataKey="total_value" name="Portfolio" stroke="#4f8cff" fill="#4f8cff20" strokeWidth={2} />
+        <Area type="monotone" dataKey="value" name="Portfolio" stroke="#4f8cff" fill="#4f8cff20" strokeWidth={2} />
         {benchmarkData && (
-          <Area type="monotone" dataKey="total_value" name="Benchmark" data={benchmarkData} stroke="#8b8fa3" fill="none" strokeWidth={1} strokeDasharray="4 4" />
+          <Area type="monotone" dataKey="value" name="Benchmark" data={benchmarkData} stroke="#8b8fa3" fill="none" strokeWidth={1} strokeDasharray="4 4" />
         )}
         <Brush dataKey="date" height={30} stroke="var(--color-border)" fill="var(--color-surface)" />
       </AreaChart>
