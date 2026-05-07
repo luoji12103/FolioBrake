@@ -49,11 +49,11 @@ function Backtest() {
     finally { setLoading(false); }
   };
 
-  const computeDrawdown = (equity: { date: string; total_value: number }[]) => {
-    let peak = equity[0]?.total_value || 0;
+  const computeDrawdown = (equity: { date: string; value: number }[]) => {
+    let peak = equity[0]?.value || 0;
     return equity.map(p => {
-      peak = Math.max(peak, p.total_value);
-      return { date: p.date, drawdown: ((p.total_value - peak) / peak) * 100 };
+      peak = Math.max(peak, p.value);
+      return { date: p.date, drawdown: ((p.value - peak) / peak) * 100 };
     });
   };
 

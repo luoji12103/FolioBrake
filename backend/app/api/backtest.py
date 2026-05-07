@@ -67,10 +67,16 @@ def get_results(run_id: int, db: Session = Depends(get_db)):
     if not run:
         return {"error": "Run not found"}
 
+    # Get config
+    config = db.execute(select(BacktestConfig).where(BacktestConfig.id == run.config_id)).scalar_one_or_none()
+    strat_cfg = None
+    if config:
+        strat_cfg = db.execute(select(StrategyConfig).where(StrategyConfig.id == config.strategy_config_id)).scalar_one_or_none()
+
     snapshots = list(db.execute(
         select(PortfolioSnapshot).where(PortfolioSnapshot.run_id == run_id).order_by(PortfolioSnapshot.date)
     ).scalars().all())
-    equity_curve = [{"date": str(s.date), "total_value": s.total_value, "daily_return": s.daily_return} for s in snapshots]
+    equity_curve = [{"date": str(s.date), "value": s.total_value} for s in snapshots]
 
     metrics = list(db.execute(
         select(PerformanceMetric).where(PerformanceMetric.run_id == run_id)
@@ -80,11 +86,24 @@ def get_results(run_id: int, db: Session = Depends(get_db)):
     trades = list(db.execute(
         select(SimulatedTrade).where(SimulatedTrade.run_id == run_id).order_by(SimulatedTrade.date)
     ).scalars().all())
-    trade_list = [{"date": str(t.date), "instrument_id": t.instrument_id, "side": t.side,
-                   "quantity": t.quantity, "price": t.price, "slippage": t.slippage,
-                   "commission": t.commission} for t in trades]
+    trade_log = [{"date": str(t.date), "symbol": str(t.instrument_id), "action": t.side,
+                  "quantity": t.quantity, "price": t.price, "notional": t.quantity * t.price,
+                  "reason": "strategy signal"} for t in trades]
 
-    return {"run_id": run.id, "equity_curve": equity_curve, "metrics": metrics_dict, "trades": trade_list}
+    return {
+        "run_id": str(run.id),
+        "config": {
+            "strategy": strat_cfg.name if strat_cfg else "unknown",
+            "start_date": str(config.start_date) if config else "",
+            "end_date": str(config.end_date) if config else "",
+            "initial_capital": config.initial_capital if config else 0,
+            "benchmark": config.benchmark_symbol if config else "",
+        },
+        "metrics": metrics_dict,
+        "trade_log": trade_log,
+        "benchmark_comparison": [],
+        "equity_curve": equity_curve,
+    }
 
 
 @router.get("/compare/{run_id}")

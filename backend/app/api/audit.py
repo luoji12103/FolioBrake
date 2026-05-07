@@ -47,7 +47,7 @@ def run_audit(req: AuditRequest, db: Session = Depends(get_db)):
     audit = grader.run_audit(strat_cfg.id, btc.id)
     db.commit()
     return {
-        "audit_id": audit.id,
+        "run_id": str(audit.id),
         "grade": audit.grade,
         "score": audit.score,
         "summary": audit.summary,
@@ -61,11 +61,20 @@ def get_audit_status(run_id: int, db: Session = Depends(get_db)):
         return {"error": "Audit run not found"}
     checks = list(db.execute(select(AuditCheckResult).where(AuditCheckResult.audit_run_id == audit.id)).scalars().all())
     return {
-        "audit_id": audit.id,
+        "run_id": str(audit.id),
         "grade": audit.grade,
         "score": audit.score,
+        "max_score": 100,
         "summary": audit.summary,
-        "checks": [{"check_name": c.check_name, "status": c.status, "score": c.score, "detail": c.detail} for c in checks],
+        "created_at": str(audit.created_at) if hasattr(audit, 'created_at') and audit.created_at else "",
+        "checks": [{
+            "id": str(c.id),
+            "category": c.check_name.split("_")[0] if "_" in c.check_name else "general",
+            "name": c.check_name,
+            "description": c.detail or "",
+            "result": "PASS" if c.status == "PASS" else ("WARN" if c.status == "WARN" else "FAIL"),
+            "detail": c.detail or "",
+        } for c in checks],
     }
 
 

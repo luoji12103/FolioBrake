@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.data.adapter import AKShareAdapter
-from app.data.models import DailyBar, DataQualityReport, Instrument
+from app.data.models import DailyBar, Instrument
 from app.data.sync import DataSyncService
 from app.db.base import get_db
 
@@ -51,7 +51,7 @@ class InstrumentOut(BaseModel):
 
 
 class BarOut(BaseModel):
-    trade_date: date_type
+    trade_date: date_type = Field(serialization_alias="date")
     open: float
     high: float
     low: float
@@ -60,23 +60,11 @@ class BarOut(BaseModel):
     amount: float
     adj_close: Optional[float] = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
     @field_serializer("trade_date")
     def serialize_trade_date(self, v: date_type) -> str:
         return v.isoformat()
-
-
-class QualityReportOut(BaseModel):
-    id: int
-    instrument_id: int
-    check_date: datetime
-    missing_dates: Optional[list[str]] = None
-    price_jumps: Optional[list[dict]] = None
-    zero_volume_dates: Optional[list[str]] = None
-    overall_status: str
-
-    model_config = {"from_attributes": True}
 
 
 class SyncSummary(BaseModel):
@@ -170,34 +158,71 @@ def get_bars(
     return list(rows)
 
 
-@router.get("/quality/{symbol}", response_model=QualityReportOut)
-def get_quality_report(
-    symbol: str,
-    db: Session = Depends(get_db),
-) -> DataQualityReport:
-    """Return the most recent DataQualityReport for *symbol*."""
-    adapter = AKShareAdapter()
-    normalised = adapter.normalize_symbol(symbol)
-
-    inst = db.execute(
-        select(Instrument).where(Instrument.symbol == normalised)
-    ).scalar_one_or_none()
-
-    if inst is None:
+@router.get("/quality/{symbol}")
+def get_quality(symbol: str, db: Session = Depends(get_db)):
+    """Compute data quality check for a given ETF symbol."""
+    normalised = symbol.strip().zfill(6)
+    inst = db.execute(select(Instrument).where(Instrument.symbol == normalised)).scalar_one_or_none()
+    if not inst:
         raise HTTPException(status_code=404, detail=f"Instrument {normalised} not found.")
 
-    report = db.execute(
-        select(DataQualityReport)
-        .where(DataQualityReport.instrument_id == inst.id)
-        .order_by(DataQualityReport.check_date.desc())
-    ).scalar_one_or_none()
+    bars = list(db.execute(
+        select(DailyBar).where(DailyBar.instrument_id == inst.id).order_by(DailyBar.trade_date)
+    ).scalars().all())
 
-    if report is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No quality report found for symbol={normalised}",
-        )
-    return report
+    if not bars:
+        return {
+            "symbol": normalised,
+            "bars_count": 0,
+            "date_range_start": None,
+            "date_range_end": None,
+            "missing_dates": 0,
+            "status": "ERROR",
+            "issues": ["No bars found for this instrument"],
+        }
+
+    dates = [b.trade_date for b in bars]
+    date_range_start = dates[0].isoformat()
+    date_range_end = dates[-1].isoformat()
+
+    # Check for gaps (weekdays only)
+    missing = 0
+    issues = []
+    for i in range(1, len(dates)):
+        diff = (dates[i] - dates[i-1]).days
+        if diff > 3:  # More than a weekend gap
+            missing += diff - 1
+
+    # Check for zero volume
+    zero_vol = sum(1 for b in bars if b.volume == 0)
+    if zero_vol > 0:
+        issues.append(f"{zero_vol} bars with zero volume")
+
+    # Check for price jumps (>10% daily)
+    jumps = 0
+    for i in range(1, len(bars)):
+        if bars[i-1].close > 0:
+            change = abs(bars[i].close - bars[i-1].close) / bars[i-1].close
+            if change > 0.10:
+                jumps += 1
+    if jumps > 0:
+        issues.append(f"{jumps} price jumps (>10% daily)")
+
+    status = "OK"
+    if missing > 5 or zero_vol > 10 or jumps > 3:
+        status = "WARNING"
+    if missing > 20 or zero_vol > 50:
+        status = "ERROR"
+
+    return {
+        "symbol": normalised,
+        "bars_count": len(bars),
+        "date_range_start": date_range_start,
+        "date_range_end": date_range_end,
+        "missing_dates": missing,
+        "status": status,
+        "issues": issues,
+    }
 
 
 @router.get("/sources")

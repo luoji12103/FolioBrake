@@ -183,7 +183,16 @@ def get_holdings(portfolio_id: int, db: Session = Depends(get_db)):
 @router.get("/pnl/{portfolio_id}")
 def get_pnl(portfolio_id: int, db: Session = Depends(get_db)):
     engine = PaperTradingEngine(db)
-    return engine.get_pnl(portfolio_id)
+    pnl = engine.get_pnl(portfolio_id)
+    return {
+        "portfolio_id": str(portfolio_id),
+        "total_value": pnl.get("total_value", 0),
+        "cash": pnl.get("cash", 0),
+        "invested": pnl.get("invested", 0),
+        "total_pnl": pnl.get("total_pnl", 0),
+        "total_pnl_pct": pnl.get("total_pnl_pct", 0),
+        "date": date_type.today().isoformat(),
+    }
 
 
 @router.get("/ledger/{portfolio_id}")

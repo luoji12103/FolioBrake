@@ -12,7 +12,7 @@ function Audit() {
     setLoading(true); setError(null);
     try {
       const { data } = await api.post("/audit/run", { strategy_config_id: 1, backtest_config_id: 1 });
-      const res = await api.get(`/audit/report/${data.audit_id}`);
+      const res = await api.get(`/audit/report/${data.run_id}`);
       setResult(res.data);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
@@ -47,10 +47,10 @@ function Audit() {
               <thead><tr><th>Check</th><th>Status</th><th>Score</th></tr></thead>
               <tbody>
                 {result.checks.map((c: any) => (
-                  <tr key={c.check_name}>
-                    <td>{c.check_name}</td>
-                    <td><span className={`badge ${c.status === "PASS" ? "badge-ok" : c.status === "WARN" ? "badge-warning" : "badge-error"}`}>{c.status}</span></td>
-                    <td>{c.score}</td>
+                  <tr key={c.id || c.name}>
+                    <td>{c.name}</td>
+                    <td><span className={`badge ${c.result === "PASS" ? "badge-ok" : c.result === "WARN" ? "badge-warning" : "badge-error"}`}>{c.result}</span></td>
+                    <td>{c.detail}</td>
                   </tr>
                 ))}
               </tbody>

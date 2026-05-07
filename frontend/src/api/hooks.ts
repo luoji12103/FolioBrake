@@ -122,8 +122,12 @@ export interface QualityCheck {
 export function useQuality(symbol: string | null) {
   const fetcher = useCallback(async () => {
     if (!symbol) return null;
-    const { data } = await api.get(`/data/quality/${symbol}`);
-    return data as QualityCheck;
+    try {
+      const { data } = await api.get(`/data/quality/${symbol}`);
+      return data as QualityCheck;
+    } catch {
+      return null;
+    }
   }, [symbol]);
 
   return useQuery(fetcher);
@@ -258,7 +262,7 @@ export interface BacktestResult {
     initial_capital: number;
     benchmark: string;
   };
-  metrics: BacktestMetrics;
+  metrics: Record<string, number>;
   trade_log: TradeLogEntry[];
   benchmark_comparison: BenchmarkRow[];
   equity_curve: { date: string; value: number }[];

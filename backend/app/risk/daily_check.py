@@ -66,7 +66,7 @@ class MarketRiskEvaluator:
             if len(bars) >= 120:
                 import numpy as np
                 prices = [b.close for b in bars]
-                daily_rets = np.diff(prices[-20:]) / prices[-21:-1]
+                daily_rets = np.diff(prices[-20:]) / prices[-20:-1]
                 vol_20 = float(np.std(daily_rets) * np.sqrt(252))
 
                 rolling_vols = []
