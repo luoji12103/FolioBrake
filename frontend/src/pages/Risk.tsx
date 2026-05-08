@@ -1,5 +1,6 @@
-import { useRiskState, useRiskRules, useRiskOverlay, RiskLevel } from "../api/hooks";
+import { useRiskState, useRiskRules, useRiskOverlay, RiskLevel, RiskRule } from "../api/hooks";
 import { ErrorMessage } from "../components/ErrorMessage";
+import { DataTable, type ColumnDef } from "../components/DataTable";
 import RiskBadge from "../components/RiskBadge";
 import "./shared.css";
 
@@ -74,6 +75,50 @@ function RiskSkeleton() {
     </div>
   );
 }
+
+const RULE_COLUMNS: ColumnDef<RiskRule>[] = [
+  {
+    key: "date",
+    label: "Date",
+    sortable: true,
+    render: (v) => (
+      <span style={{ color: "var(--color-text-dim)", fontSize: "var(--text-xs)" }}>
+        {new Date(v as string).toLocaleDateString("en-CN")}
+      </span>
+    ),
+  },
+  {
+    key: "rule_name",
+    label: "Rule Name",
+    sortable: true,
+    render: (v) => <span style={{ fontWeight: 600 }}>{String(v)}</span>,
+  },
+  {
+    key: "severity",
+    label: "Severity",
+    sortable: true,
+    render: (v) => <SeverityBadge severity={v as "INFO" | "WARNING" | "CRITICAL"} />,
+  },
+  {
+    key: "detail",
+    label: "Detail",
+    render: (v) => (
+      <span style={{ whiteSpace: "normal", maxWidth: 240, fontSize: "var(--text-xs)", color: "var(--color-text-dim)", display: "inline-block" }}>
+        {JSON.stringify(v)}
+      </span>
+    ),
+  },
+  {
+    key: "triggered",
+    label: "Status",
+    sortable: true,
+    render: (v) => (
+      <span className={`badge ${(v as boolean) ? "badge-fail" : "badge-pass"}`}>
+        {(v as boolean) ? "TRIGGERED" : "OK"}
+      </span>
+    ),
+  },
+];
 
 function Risk() {
   const { data: riskState, error: stateErr, isLoading: stateLoading, refetch: refetchRisk } = useRiskState();
@@ -153,42 +198,13 @@ function Risk() {
           <div className="card">
             <div className="card-title">Triggered Rules</div>
             {rules && rules.length > 0 ? (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Rule Name</th>
-                      <th>Severity</th>
-                      <th>Detail</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rules.map((r) => (
-                      <tr key={r.rule_name}>
-                        <td style={{ color: "var(--color-text-dim)", fontSize: "var(--text-xs)" }}>
-                          {new Date(r.date).toLocaleDateString("en-CN")}
-                        </td>
-                        <td style={{ fontWeight: 600 }}>{r.rule_name}</td>
-                        <td>
-                          <SeverityBadge severity={r.severity} />
-                        </td>
-                        <td style={{ whiteSpace: "normal", maxWidth: 240, fontSize: "var(--text-xs)", color: "var(--color-text-dim)" }}>
-                          {JSON.stringify(r.detail)}
-                        </td>
-                        <td>
-                          <span
-                            className={`badge ${r.triggered ? "badge-fail" : "badge-pass"}`}
-                          >
-                            {r.triggered ? "TRIGGERED" : "OK"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                data={rules as unknown as Record<string, unknown>[]}
+                columns={RULE_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
+                pageSize={15}
+                showFilter={true}
+                filterPlaceholder="Search rules\u2026"
+              />
             ) : (
               <div className="state-banner state-empty" style={{ marginBottom: 0 }}>
                 <div className="state-empty-icon">{"\u2705"}</div>

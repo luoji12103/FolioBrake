@@ -3,6 +3,7 @@ import api from "../api/client";
 import { useSignals, usePortfolio, useSignalHistory, Signal, SignalHistoryEntry, SignalStatistics } from "../api/hooks";
 import { WeightBarChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
+import { DataTable, type ColumnDef } from "../components/DataTable";
 import "./shared.css";
 
 function ScoreBar({ score, maxScore = 100 }: { score: number; maxScore?: number }) {
@@ -89,34 +90,95 @@ function SignalExpandable({ signal }: { signal: Signal }) {
   );
 }
 
-function SignalsTable({ signals }: { signals: Signal[] }) {
-  const sorted = useMemo(() => [...signals].sort((a, b) => a.rank - b.rank), [signals]);
+const SIGNAL_COLUMNS: ColumnDef<Signal>[] = [
+  {
+    key: "symbol",
+    label: "Symbol",
+    sortable: true,
+    render: (v) => <span style={{ fontWeight: 600, color: "var(--color-accent)" }}>{String(v)}</span>,
+  },
+  {
+    key: "score",
+    label: "Score",
+    sortable: true,
+    render: (v) => <ScoreBar score={v as number} />,
+  },
+  {
+    key: "rank",
+    label: "Rank",
+    sortable: true,
+    render: (v) => (
+      <span style={{ color: "var(--color-text-muted)", fontVariantNumeric: "tabular-nums" }}>
+        #{String(v)}
+      </span>
+    ),
+  },
+  {
+    key: "reason",
+    label: "Reason",
+    render: (v) => (
+      <span style={{ maxWidth: 300, whiteSpace: "normal", fontSize: "var(--text-xs)", color: "var(--color-text-dim)", display: "inline-block" }}>
+        {formatReason(v as Record<string, any>)}
+      </span>
+    ),
+  },
+];
 
+const SIGNAL_HISTORY_COLUMNS: ColumnDef<SignalHistoryEntry>[] = [
+  { key: "date", label: "Date", sortable: true, render: (v) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{String(v)}</span> },
+  {
+    key: "symbol",
+    label: "Symbol",
+    sortable: true,
+    render: (v) => <span style={{ fontWeight: 600, color: "var(--color-accent)" }}>{String(v)}</span>,
+  },
+  { key: "score", label: "Score", sortable: true, render: (v) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{(v as number).toFixed(1)}</span> },
+  {
+    key: "rank",
+    label: "Rank",
+    sortable: true,
+    render: (v) => <span style={{ color: "var(--color-text-muted)", fontVariantNumeric: "tabular-nums" }}>#{String(v)}</span>,
+  },
+  {
+    key: "subsequent_return_7d",
+    label: "7d Return",
+    sortable: true,
+    render: (v) => (
+      <span style={{ fontVariantNumeric: "tabular-nums", color: (v as number) >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+        {((v as number) * 100).toFixed(2)}%
+      </span>
+    ),
+  },
+  {
+    key: "subsequent_return_30d",
+    label: "30d Return",
+    sortable: true,
+    render: (v) => (
+      <span style={{ fontVariantNumeric: "tabular-nums", color: (v as number) >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+        {((v as number) * 100).toFixed(2)}%
+      </span>
+    ),
+  },
+  {
+    key: "is_correct",
+    label: "Correct",
+    sortable: true,
+    render: (v) => (
+      <span className={`badge ${(v as boolean) ? "badge-pass" : "badge-fail"}`}>
+        {(v as boolean) ? "Yes" : "No"}
+      </span>
+    ),
+  },
+];
+
+function SignalsTable({ signals }: { signals: Signal[] }) {
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Score</th>
-            <th>Rank</th>
-            <th>Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((s) => (
-            <tr key={s.symbol}>
-              <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{s.symbol}</td>
-              <td><ScoreBar score={s.score} /></td>
-              <td style={{ color: "var(--color-text-muted)", fontVariantNumeric: "tabular-nums" }}>#{s.rank}</td>
-              <td style={{ maxWidth: 300, whiteSpace: "normal", fontSize: "var(--text-xs)", color: "var(--color-text-dim)" }}>
-                {formatReason(s.reason)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      data={signals as unknown as Record<string, unknown>[]}
+      columns={SIGNAL_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
+      pageSize={50}
+      showFilter={false}
+    />
   );
 }
 
@@ -144,44 +206,13 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 }
 
 function SignalHistoryTable({ signals }: { signals: SignalHistoryEntry[] }) {
-  const sorted = useMemo(() => [...signals].sort((a, b) => a.date > b.date ? -1 : 1), [signals]);
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Symbol</th>
-            <th>Score</th>
-            <th>Rank</th>
-            <th>7d Return</th>
-            <th>30d Return</th>
-            <th>Correct</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((s) => (
-            <tr key={`${s.date}-${s.symbol}`}>
-              <td style={{ fontVariantNumeric: "tabular-nums" }}>{s.date}</td>
-              <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{s.symbol}</td>
-              <td style={{ fontVariantNumeric: "tabular-nums" }}>{s.score.toFixed(1)}</td>
-              <td style={{ color: "var(--color-text-muted)", fontVariantNumeric: "tabular-nums" }}>#{s.rank}</td>
-              <td style={{ fontVariantNumeric: "tabular-nums", color: s.subsequent_return_7d >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
-                {(s.subsequent_return_7d * 100).toFixed(2)}%
-              </td>
-              <td style={{ fontVariantNumeric: "tabular-nums", color: s.subsequent_return_30d >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
-                {(s.subsequent_return_30d * 100).toFixed(2)}%
-              </td>
-              <td>
-                <span className={`badge ${s.is_correct ? "badge-ok" : "badge-fail"}`}>
-                  {s.is_correct ? "Yes" : "No"}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      data={signals as unknown as Record<string, unknown>[]}
+      columns={SIGNAL_HISTORY_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
+      pageSize={20}
+      filterPlaceholder="Search signals\u2026"
+    />
   );
 }
 

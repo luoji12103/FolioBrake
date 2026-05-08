@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import api from "../api/client";
 import { ErrorMessage } from "../components/ErrorMessage";
+import { DataTable, type ColumnDef } from "../components/DataTable";
 import { useInstruments, useDataHealth, useSyncProgress, Instrument } from "../api/hooks";
 import "./shared.css";
 
@@ -28,34 +29,62 @@ function SkeletonRow() {
   );
 }
 
+const INSTRUMENT_COLUMNS: ColumnDef<Instrument>[] = [
+  {
+    key: "symbol",
+    label: "Symbol",
+    sortable: true,
+    render: (v) => (
+      <span style={{ fontWeight: 600, color: "var(--color-accent)" }}>{String(v)}</span>
+    ),
+  },
+  { key: "name", label: "Name", sortable: true },
+  {
+    key: "exchange",
+    label: "Exchange",
+    sortable: true,
+    render: (v) => <span style={{ color: "var(--color-text-muted)" }}>{String(v)}</span>,
+  },
+  {
+    key: "type",
+    label: "Type",
+    sortable: true,
+    render: (v) => <span className="badge badge-ok">{String(v)}</span>,
+  },
+  {
+    key: "category",
+    label: "Category",
+    sortable: true,
+    render: (v) => <span style={{ color: "var(--color-text-muted)" }}>{v ? String(v) : "N/A"}</span>,
+  },
+  {
+    key: "created_at",
+    label: "Created",
+    sortable: true,
+    render: (v) => (
+      <span style={{ color: "var(--color-text-dim)", fontSize: "var(--text-xs)" }}>
+        {formatDate(v as string | null)}
+      </span>
+    ),
+  },
+];
+
 function UniverseTable({ instruments }: { instruments: Instrument[] }) {
-  const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
-  const categories = Array.from(new Set(instruments.map((i) => i.category))).filter(Boolean).sort() as string[];
+  const categories = useMemo(
+    () => Array.from(new Set(instruments.map((i) => i.category))).filter(Boolean).sort() as string[],
+    [instruments]
+  );
 
-  const filtered = instruments.filter((i) => {
-    const matchSearch =
-      !search ||
-      i.symbol.toLowerCase().includes(search.toLowerCase()) ||
-      i.name.toLowerCase().includes(search.toLowerCase());
-    const matchCat = !categoryFilter || i.category === categoryFilter;
-    return matchSearch && matchCat;
-  });
+  const categoryFiltered = useMemo(
+    () => (categoryFilter ? instruments.filter((i) => i.category === categoryFilter) : instruments),
+    [instruments, categoryFilter]
+  );
 
   return (
     <>
-      <div className="grid-col-2" style={{ marginBottom: "var(--space-4)", maxWidth: 500 }}>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label htmlFor="uni-search">Search</label>
-          <input
-            id="uni-search"
-            className="form-input"
-            placeholder="Symbol or name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      <div style={{ marginBottom: "var(--space-4)", maxWidth: 240 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label htmlFor="uni-cat">Category</label>
           <select
@@ -72,46 +101,13 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
         </div>
       </div>
 
-      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)", marginBottom: "var(--space-3)" }}>
-        {filtered.length} of {instruments.length} instruments
-      </p>
-
-      {filtered.length === 0 ? (
-        <div className="state-banner state-empty">
-          <div className="state-empty-icon">{"\uD83D\uDD0D"}</div>
-          <div className="state-empty-title">No matches found</div>
-          <div className="state-empty-desc">
-            Try adjusting your search or category filter.
-          </div>
-        </div>
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Name</th>
-                <th>Exchange</th>
-                <th>Type</th>
-                <th>Category</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((inst) => (
-                <tr key={inst.symbol}>
-                  <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{inst.symbol}</td>
-                  <td>{inst.name}</td>
-                  <td style={{ color: "var(--color-text-muted)" }}>{inst.exchange}</td>
-                  <td><span className="badge badge-ok">{inst.type}</span></td>
-                  <td style={{ color: "var(--color-text-muted)" }}>{inst.category || "N/A"}</td>
-                  <td style={{ color: "var(--color-text-dim)", fontSize: "var(--text-xs)" }}>{formatDate(inst.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        data={categoryFiltered as unknown as Record<string, unknown>[]}
+        columns={INSTRUMENT_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
+        pageSize={25}
+        filterPlaceholder="Search symbol or name\u2026"
+        emptyMessage="No instruments match your filters."
+      />
     </>
   );
 }

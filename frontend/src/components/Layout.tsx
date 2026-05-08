@@ -1,21 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useRiskState, useRiskAlerts } from "../api/hooks";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { Kbd } from "./Kbd";
+import { CommandPalette } from "./CommandPalette";
+import { ShortcutHelper } from "./ShortcutHelper";
 import RiskBadge from "./RiskBadge";
 import "./Layout.css";
 
-function ThemeToggle() {
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
+function ThemeToggle({ theme, onToggle }: { theme: string; onToggle: () => void }) {
   return (
     <button
       className="icon-btn"
-      onClick={() => setTheme(t => (t === "dark" ? "light" : "dark"))}
+      onClick={onToggle}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
       title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
     >
@@ -46,10 +43,39 @@ function Layout() {
   const { data: riskState } = useRiskState();
   const { data: alertsData } = useRiskAlerts();
   const location = useLocation();
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const [menuOpen, setMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helperOpen, setHelperOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const closeMenu = () => setMenuOpen(false);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(t => (t === "dark" ? "light" : "dark"));
+  }, []);
+
+  const refreshPage = useCallback(() => {
+    window.dispatchEvent(new Event("refresh-data"));
+  }, []);
+
+  useKeyboardShortcuts({
+    "Ctrl+K": () => setPaletteOpen((o) => !o),
+    "Shift+/": () => setHelperOpen((o) => !o),
+    "Ctrl+Shift+L": toggleTheme,
+    "Ctrl+Shift+R": refreshPage,
+    "Escape": () => {
+      setPaletteOpen(false);
+      setHelperOpen(false);
+      setAlertsOpen(false);
+      setMenuOpen(false);
+    },
+  });
 
   const navLinks = (
     <>
@@ -88,7 +114,19 @@ function Layout() {
           <h1 className="logo">FolioBrake</h1>
         </div>
         <div className="header-right">
-          <ThemeToggle />
+          <button
+            className="search-trigger"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Search commands"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <span className="search-trigger-label">Search...</span>
+            <Kbd combo="Ctrl+K" />
+          </button>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <RiskBadge state={riskState?.state || "NORMAL"} />
           <div style={{ position: "relative" }}>
             <button
@@ -132,6 +170,8 @@ function Layout() {
       <main className="main">
         <Outlet />
       </main>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onToggleTheme={toggleTheme} />
+      <ShortcutHelper open={helperOpen} onClose={() => setHelperOpen(false)} />
     </div>
   );
 }

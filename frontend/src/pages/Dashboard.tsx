@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { healthCheck } from "../api/client";
-import { useRiskState, useSignals, usePortfolio, usePaperPortfolios, usePaperPerformance, useRealtimePrices } from "../api/hooks";
+import { useRiskState, useSignals, usePortfolio, usePaperPortfolios, usePaperPerformance, useRealtimePrices, Signal } from "../api/hooks";
 import { EquityChart, DrawdownChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
+import { DataTable, type ColumnDef } from "../components/DataTable";
 import "./shared.css";
 
 function DashboardSkeleton() {
@@ -19,6 +20,27 @@ function DashboardSkeleton() {
     </div>
   );
 }
+
+const DASHBOARD_SIGNAL_COLUMNS: ColumnDef<Signal>[] = [
+  {
+    key: "symbol",
+    label: "Symbol",
+    sortable: true,
+    render: (v) => <span style={{ fontWeight: 600, color: "var(--color-accent)" }}>{String(v)}</span>,
+  },
+  {
+    key: "score",
+    label: "Score",
+    sortable: true,
+    render: (v) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{(v as number).toFixed(1)}</span>,
+  },
+  {
+    key: "rank",
+    label: "Rank",
+    sortable: true,
+    render: (v) => <span style={{ color: "var(--color-text-muted)" }}>#{String(v)}</span>,
+  },
+];
 
 function Dashboard() {
   const [health, setHealth] = useState<{ status: string; version: string } | null>(null);
@@ -170,24 +192,12 @@ function Dashboard() {
       {signals && signals.length > 0 && (
         <div className="card">
           <div className="card-title">Latest Signals</div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Symbol</th><th>Score</th><th>Rank</th></tr>
-              </thead>
-              <tbody>
-                {[...signals].sort((a, b) => a.rank - b.rank).slice(0, 5).map((s) => (
-                  <tr key={s.symbol}>
-                    <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{s.symbol}</td>
-                    <td>
-                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{s.score.toFixed(1)}</span>
-                    </td>
-                    <td style={{ color: "var(--color-text-muted)" }}>#{s.rank}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={[...signals].sort((a, b) => a.rank - b.rank).slice(0, 5) as unknown as Record<string, unknown>[]}
+            columns={DASHBOARD_SIGNAL_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
+            showFilter={false}
+            showPagination={false}
+          />
         </div>
       )}
 

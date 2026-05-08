@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ErrorMessage } from "../components/ErrorMessage";
+import { DataTable, type ColumnDef } from "../components/DataTable";
 import { usePaperHoldings, usePaperPnl, PaperHolding } from "../api/hooks";
 import api from "../api/client";
 import "./shared.css";
@@ -82,6 +83,60 @@ function PortfolioSummary({
   );
 }
 
+const HOLDINGS_COLUMNS: ColumnDef<PaperHolding>[] = [
+  {
+    key: "instrument_id",
+    label: "Instrument ID",
+    sortable: true,
+    render: (v) => <span style={{ fontWeight: 600, color: "var(--color-accent)" }}>{String(v)}</span>,
+  },
+  {
+    key: "quantity",
+    label: "Quantity",
+    sortable: true,
+    align: "right",
+    render: (v) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{(v as number).toLocaleString()}</span>,
+  },
+  {
+    key: "avg_cost",
+    label: "Avg Cost",
+    sortable: true,
+    align: "right",
+    render: (v) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCurrency(v as number)}</span>,
+  },
+  {
+    key: "current_price",
+    label: "Current Price",
+    sortable: true,
+    align: "right",
+    render: (v) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCurrency(v as number)}</span>,
+  },
+  {
+    key: "market_value",
+    label: "Market Value",
+    sortable: true,
+    align: "right",
+    render: (v) => <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtCurrency(v as number)}</span>,
+  },
+  {
+    key: "pnl",
+    label: "P&L",
+    sortable: true,
+    align: "right",
+    render: (v) => (
+      <span
+        style={{
+          color: (v as number) >= 0 ? "var(--color-green)" : "var(--color-red)",
+          fontWeight: 600,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {fmtCurrency(v as number)}
+      </span>
+    ),
+  },
+];
+
 function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
   if (!holdings || holdings.length === 0) {
     return (
@@ -98,47 +153,15 @@ function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
     );
   }
 
-  const sorted = [...holdings].sort(
-    (a, b) => b.market_value - a.market_value
-  );
-
   return (
     <div className="card">
       <div className="card-title">Holdings ({holdings.length})</div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Instrument ID</th>
-              <th>Quantity</th>
-              <th>Avg Cost</th>
-              <th>Current Price</th>
-              <th>Market Value</th>
-              <th>P&amp;L</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((h) => (
-              <tr key={h.instrument_id}>
-                <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{h.instrument_id}</td>
-                <td style={{ fontVariantNumeric: "tabular-nums" }}>{h.quantity.toLocaleString()}</td>
-                <td style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCurrency(h.avg_cost)}</td>
-                <td style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCurrency(h.current_price)}</td>
-                <td style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtCurrency(h.market_value)}</td>
-                <td
-                  style={{
-                    color: h.pnl >= 0 ? "var(--color-green)" : "var(--color-red)",
-                    fontWeight: 600,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {fmtCurrency(h.pnl)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        data={holdings as unknown as Record<string, unknown>[]}
+        columns={HOLDINGS_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
+        pageSize={20}
+        filterPlaceholder="Search holdings\u2026"
+      />
     </div>
   );
 }
