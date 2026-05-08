@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from datetime import date, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 

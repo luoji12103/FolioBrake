@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../api/client";
+import { runOptimization, type OptimizationResponse } from "../api/hooks";
 import { EquityChart, DrawdownChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import "./shared.css";
@@ -12,6 +13,15 @@ const METRIC_TOOLTIPS: Record<string, string> = {
   volatility: "Annualized standard deviation of daily returns. Lower = more stable",
   win_rate: "Fraction of trades that were profitable",
 };
+
+const AVAILABLE_PARAMS: Record<string, { label: string; defaults: number[] }> = {
+  max_holdings: { label: "Max Holdings", defaults: [3, 5, 7] },
+  max_concentration: { label: "Max Concentration", defaults: [0.2, 0.3, 0.4] },
+  min_positions: { label: "Min Positions", defaults: [2, 3, 4] },
+  max_turnover: { label: "Max Turnover", defaults: [0.3, 0.5, 0.7] },
+};
+
+const OPTIMIZABLE_METRICS = ["sharpe_ratio", "cagr", "total_return", "max_drawdown", "volatility"];
 
 function formatMetricValue(key: string, v: number): string {
   const pctKeys = ["total_return", "cagr", "max_drawdown", "volatility", "win_rate"];
@@ -36,7 +46,69 @@ function BacktestSkeleton() {
   );
 }
 
-function Backtest() {
+function ParamGridEditor({ grid, onChange }: { grid: Record<string, number[]>; onChange: (g: Record<string, number[]>) => void }) {
+  const toggleParam = (key: string) => {
+    if (grid[key]) {
+      const next = { ...grid };
+      delete next[key];
+      onChange(next);
+    } else {
+      onChange({ ...grid, [key]: [...(AVAILABLE_PARAMS[key]?.defaults || [0.1, 0.2, 0.3])] });
+    }
+  };
+
+  const updateValues = (key: string, raw: string) => {
+    const nums = raw.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+    onChange({ ...grid, [key]: nums });
+  };
+
+  return (
+    <div className="param-grid-editor">
+      {Object.entries(AVAILABLE_PARAMS).map(([key, meta]) => {
+        const active = !!grid[key];
+        return (
+          <div key={key} className={`param-row ${active ? "active" : ""}`}>
+            <label className="param-toggle">
+              <input type="checkbox" checked={active} onChange={() => toggleParam(key)} />
+              <span>{meta.label}</span>
+            </label>
+            {active && (
+              <input
+                className="form-input param-values"
+                type="text"
+                value={grid[key].join(", ")}
+                onChange={e => updateValues(key, e.target.value)}
+                placeholder="comma-separated values"
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HeatmapCell({ value, metric, min, max }: { value: number; metric: string; min: number; max: number }) {
+  const lowerIsBetter = metric === "max_drawdown" || metric === "volatility";
+  let ratio: number;
+  if (max === min) {
+    ratio = 0.5;
+  } else if (lowerIsBetter) {
+    ratio = (value - max) / (min - max);
+  } else {
+    ratio = (value - min) / (max - min);
+  }
+  ratio = Math.max(0, Math.min(1, ratio));
+  const r = Math.round(255 * (1 - ratio));
+  const g = Math.round(200 * ratio);
+  return (
+    <span className="heatmap-cell" style={{ background: `rgba(${r}, ${g}, 60, 0.25)` }}>
+      {formatMetricValue(metric, value)}
+    </span>
+  );
+}
+
+function SingleBacktest() {
   const [runId, setRunId] = useState<number | null>(null);
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -74,8 +146,7 @@ function Backtest() {
   };
 
   return (
-    <div className="page">
-      <h2>Backtest</h2>
+    <>
       <div className="card" style={{ marginBottom: "var(--space-4)" }}>
         <div className="grid-col-3">
           <div className="form-group">
@@ -97,7 +168,6 @@ function Backtest() {
       </div>
 
       {error && <ErrorMessage message={error} onRetry={handleRun} />}
-
       {loading && <BacktestSkeleton />}
 
       {!runId && !loading && !error && (
@@ -153,7 +223,223 @@ function Backtest() {
           Export Report
         </button>
       )}
+    </>
+  );
+}
+
+function OptimizationPanel() {
+  const [form, setForm] = useState({ start_date: "2025-01-01", end_date: "2025-10-28", initial_capital: "100000" });
+  const [paramGrid, setParamGrid] = useState<Record<string, number[]>>({
+    max_holdings: [3, 5, 7],
+    max_concentration: [0.2, 0.3, 0.4],
+  });
+  const [metric, setMetric] = useState("sharpe_ratio");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<OptimizationResponse | null>(null);
+
+  const activeParamCount = Object.keys(paramGrid).length;
+  const totalCombinations = activeParamCount > 0
+    ? Object.values(paramGrid).reduce((acc, vals) => acc * Math.max(vals.length, 1), 1)
+    : 0;
+
+  const isValid = form.start_date && form.end_date && parseFloat(form.initial_capital) > 0
+    && form.start_date < form.end_date && activeParamCount > 0 && totalCombinations <= 500;
+
+  const handleRun = async () => {
+    if (!isValid) return;
+    setLoading(true); setError(null);
+    try {
+      const data = await runOptimization({
+        start_date: form.start_date,
+        end_date: form.end_date,
+        initial_capital: parseFloat(form.initial_capital),
+        param_grid: paramGrid,
+        metric,
+      });
+      setResults(data);
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.response?.data?.error || e.message || "Unknown error";
+      setError(msg);
+    }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: "var(--space-4)" }}>
+        <div className="grid-col-3">
+          <div className="form-group">
+            <label>Start Date</label>
+            <input className="form-input" type="date" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label>End Date</label>
+            <input className="form-input" type="date" value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label>Initial Capital</label>
+            <input className="form-input" type="number" value={form.initial_capital} onChange={e => setForm({...form, initial_capital: e.target.value})} />
+          </div>
+        </div>
+
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <div className="card-title">Parameter Grid</div>
+          <ParamGridEditor grid={paramGrid} onChange={setParamGrid} />
+          <div className="param-grid-summary">
+            {activeParamCount} parameters selected &rarr; {totalCombinations} combinations
+            {totalCombinations > 500 && <span className="param-grid-warning"> (max 500)</span>}
+          </div>
+        </div>
+
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <div className="card-title">Optimize For</div>
+          <div className="metric-selector">
+            {OPTIMIZABLE_METRICS.map(m => (
+              <button
+                key={m}
+                className={`metric-btn ${metric === m ? "active" : ""}`}
+                onClick={() => setMetric(m)}
+              >
+                {m.replace(/_/g, " ")}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button className="btn-primary" onClick={handleRun} disabled={loading || !isValid} style={{ marginTop: "var(--space-3)" }}>
+          {loading ? "Optimizing..." : "Run Optimization"}
+        </button>
+      </div>
+
+      {error && <ErrorMessage message={error} onRetry={handleRun} />}
+
+      {loading && (
+        <div className="card" style={{ marginTop: "var(--space-4)" }}>
+          <div className="state-banner state-loading">
+            <span className="state-loading-icon" />
+            Running {totalCombinations} backtests in parallel...
+          </div>
+        </div>
+      )}
+
+      {!results && !loading && !error && (
+        <div className="state-banner state-empty">
+          <div className="state-empty-icon">{"\uD83D\uDD0D"}</div>
+          <div className="state-empty-title">Grid search optimization</div>
+          <div className="state-empty-desc">
+            Select parameters and values to sweep, choose an optimization metric, then run to find the best combination.
+          </div>
+        </div>
+      )}
+
+      {results && <OptimizationPanel_Results data={results} />}
+    </>
+  );
+}
+
+function OptimizationPanel_Results({ data }: { data: OptimizationResponse }) {
+  const metric = data.optimization_metric;
+  const allVals = data.all_results.map(r => r.metrics[metric] ?? 0);
+  const minVal = Math.min(...allVals);
+  const maxVal = Math.max(...allVals);
+  const paramKeys = data.all_results.length > 0 ? Object.keys(data.all_results[0].params) : [];
+
+  return (
+    <div className="card" style={{ marginTop: "var(--space-4)" }}>
+      <div className="card-title">Optimization Results</div>
+      <div className="metric-grid" style={{ marginBottom: "var(--space-4)" }}>
+        <div className="metric-card">
+          <div className="metric-label">Combinations</div>
+          <div className="metric-value">{data.total_combinations}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Successful</div>
+          <div className="metric-value positive">{data.successful_runs}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Failed</div>
+          <div className="metric-value negative">{data.failed_runs}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Best {metric.replace(/_/g, " ")}</div>
+          <div className="metric-value primary">{formatMetricValue(metric, data.best_metrics[metric] ?? 0)}</div>
+        </div>
+      </div>
+
+      <div className="card-title" style={{ marginTop: "var(--space-4)" }}>Best Parameters</div>
+      <div className="best-params">
+        {Object.entries(data.best_params).map(([k, v]) => (
+          <span key={k} className="best-param-badge">
+            {k}: {typeof v === "number" && v < 1 && v > 0 ? (v * 100).toFixed(0) + "%" : v}
+          </span>
+        ))}
+      </div>
+
+      <div className="card-title" style={{ marginTop: "var(--space-4)" }}>All Combinations (ranked)</div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              {paramKeys.map(k => <th key={k}>{k}</th>)}
+              <th>{metric.replace(/_/g, " ")}</th>
+              <th>sharpe</th>
+              <th>cagr</th>
+              <th>max dd</th>
+              <th>run</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.all_results.map((r, i) => (
+              <tr key={i} className={i === 0 ? "best-row" : ""}>
+                <td>{i + 1}</td>
+                {paramKeys.map(k => (
+                  <td key={k}>
+                    {typeof r.params[k] === "number" && r.params[k] < 1 && r.params[k] > 0
+                      ? (r.params[k] * 100).toFixed(0) + "%"
+                      : r.params[k]}
+                  </td>
+                ))}
+                <td>
+                  <HeatmapCell value={r.metrics[metric] ?? 0} metric={metric} min={minVal} max={maxVal} />
+                </td>
+                <td>{formatMetricValue("sharpe_ratio", r.metrics.sharpe_ratio ?? 0)}</td>
+                <td>{formatMetricValue("cagr", r.metrics.cagr ?? 0)}</td>
+                <td>{formatMetricValue("max_drawdown", r.metrics.max_drawdown ?? 0)}</td>
+                <td>
+                  {r.run_id ? (
+                    <a href="#" onClick={e => { e.preventDefault(); window.open(`/backtest?run=${r.run_id}`, "_self"); }}>
+                      #{r.run_id}
+                    </a>
+                  ) : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
+function Backtest() {
+  const [tab, setTab] = useState<"single" | "optimize">("single");
+
+  return (
+    <div className="page">
+      <h2>Backtest</h2>
+      <div className="tab-bar">
+        <button className={`tab-btn ${tab === "single" ? "active" : ""}`} onClick={() => setTab("single")}>
+          Single Run
+        </button>
+        <button className={`tab-btn ${tab === "optimize" ? "active" : ""}`} onClick={() => setTab("optimize")}>
+          Parameter Optimization
+        </button>
+      </div>
+      {tab === "single" ? <SingleBacktest /> : <OptimizationPanel />}
+    </div>
+  );
+}
+
 export default Backtest;

@@ -1,7 +1,21 @@
+import { useState, useEffect } from "react";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
   AreaChart, Area, BarChart, Bar, Brush,
 } from "recharts";
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" && window.innerWidth <= breakpoint
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 interface EquityChartProps {
   data: { date: string; value: number }[];
@@ -30,13 +44,14 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export function EquityChart({ data, benchmarkData }: EquityChartProps) {
+  const isMobile = useIsMobile();
   const startValue = data[0]?.value || 100000;
   return (
-    <ResponsiveContainer width="100%" height={350}>
+    <ResponsiveContainer width="100%" height={isMobile ? 240 : 350}>
       <AreaChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
-        <XAxis dataKey="date" stroke="var(--color-text-dim)" fontSize={11} tickLine={false} axisLine={false} />
-        <YAxis stroke="var(--color-text-dim)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+        <XAxis dataKey="date" stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 11} tickLine={false} axisLine={false} />
+        <YAxis stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
         <Tooltip content={<CustomTooltip />} />
         <ReferenceLine y={startValue} stroke="var(--color-text-dim)" strokeDasharray="5 5" strokeWidth={1} />
         <defs>
@@ -49,7 +64,7 @@ export function EquityChart({ data, benchmarkData }: EquityChartProps) {
         {benchmarkData && (
           <Area type="monotone" dataKey="value" name="Benchmark" data={benchmarkData} stroke="var(--color-text-dim)" fill="none" strokeWidth={1} strokeDasharray="4 4" />
         )}
-        <Brush dataKey="date" height={30} stroke="var(--color-border)" fill="var(--color-surface)" />
+        {!isMobile && <Brush dataKey="date" height={30} stroke="var(--color-border)" fill="var(--color-surface)" />}
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -60,12 +75,13 @@ interface DrawdownChartProps {
 }
 
 export function DrawdownChart({ data }: DrawdownChartProps) {
+  const isMobile = useIsMobile();
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={isMobile ? 150 : 200}>
       <AreaChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
-        <XAxis dataKey="date" stroke="var(--color-text-dim)" fontSize={11} tickLine={false} axisLine={false} />
-        <YAxis stroke="var(--color-text-dim)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v.toFixed(1)}%`} unit="%" />
+        <XAxis dataKey="date" stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 11} tickLine={false} axisLine={false} />
+        <YAxis stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v.toFixed(1)}%`} unit="%" />
         <Tooltip content={<CustomTooltip />} />
         <ReferenceLine y={0} stroke="var(--color-text-dim)" strokeDasharray="3 3" />
         <defs>
@@ -85,12 +101,13 @@ interface WeightBarChartProps {
 }
 
 export function WeightBarChart({ data }: WeightBarChartProps) {
+  const isMobile = useIsMobile();
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
       <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
-        <XAxis dataKey="symbol" stroke="var(--color-text-dim)" fontSize={12} axisLine={false} tickLine={false} />
-        <YAxis stroke="var(--color-text-dim)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v.toFixed(1)}%`} unit="%" />
+        <XAxis dataKey="symbol" stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 12} axisLine={false} tickLine={false} />
+        <YAxis stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v.toFixed(1)}%`} unit="%" />
         <Tooltip content={<CustomTooltip />} />
         <defs>
           <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
@@ -112,12 +129,13 @@ interface RollingMetric {
 }
 
 export function RollingMetricsChart({ data }: { data: RollingMetric[] }) {
+  const isMobile = useIsMobile();
   return (
-    <ResponsiveContainer width="100%" height={250}>
+    <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
       <AreaChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
-        <XAxis dataKey="date" stroke="var(--color-text-dim)" fontSize={11} tickLine={false} axisLine={false} />
-        <YAxis stroke="var(--color-text-dim)" fontSize={11} tickLine={false} axisLine={false} />
+        <XAxis dataKey="date" stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 11} tickLine={false} axisLine={false} />
+        <YAxis stroke="var(--color-text-dim)" fontSize={isMobile ? 10 : 11} tickLine={false} axisLine={false} />
         <Tooltip content={<CustomTooltip />} />
         <Area type="monotone" dataKey="sharpe" name="Sharpe" stroke="#5b9aff" fill="#5b9aff10" strokeWidth={2} />
         <Area type="monotone" dataKey="volatility" name="Volatility" stroke="#fbbf24" fill="none" strokeWidth={1} strokeDasharray="4 4" />
@@ -136,8 +154,9 @@ const RISK_COLORS: Record<number, string> = { 0: "#3ae0a0", 1: "#fbbf24", 2: "#f
 const RISK_LABELS: Record<number, string> = { 0: "NORMAL", 1: "CAUTION", 2: "DEFENSIVE", 3: "HALT" };
 
 export function RiskTimelineChart({ data }: { data: RiskTimelinePoint[] }) {
+  const isMobile = useIsMobile();
   return (
-    <ResponsiveContainer width="100%" height={120}>
+    <ResponsiveContainer width="100%" height={isMobile ? 90 : 120}>
       <BarChart data={data} barCategoryGap={0}>
         <XAxis dataKey="date" stroke="var(--color-text-dim)" fontSize={10} tickLine={false} axisLine={false} />
         <Tooltip

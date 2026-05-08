@@ -357,6 +357,35 @@ export function useBacktestResults(runId: string | null) {
   return useQuery(fetcher);
 }
 
+export interface OptimizationResult {
+  params: Record<string, number>;
+  run_id: number | null;
+  metrics: Record<string, number>;
+}
+
+export interface OptimizationResponse {
+  total_combinations: number;
+  successful_runs: number;
+  failed_runs: number;
+  optimization_metric: string;
+  best_params: Record<string, number>;
+  best_run_id: number;
+  best_metrics: Record<string, number>;
+  all_results: OptimizationResult[];
+}
+
+export async function runOptimization(payload: {
+  start_date: string;
+  end_date: string;
+  initial_capital?: number;
+  benchmark_symbol?: string;
+  param_grid: Record<string, number[]>;
+  metric?: string;
+}): Promise<OptimizationResponse> {
+  const { data } = await api.post("/backtest/optimize", payload);
+  return data as OptimizationResponse;
+}
+
 // ---------------------------------------------------------------------------
 // Audit Report
 // ---------------------------------------------------------------------------

@@ -1,6 +1,10 @@
 from datetime import date as date_type
+from typing import Any
+import itertools
+import concurrent.futures
+
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
@@ -172,4 +176,126 @@ def compare_runs(req: CompareRequest, db: Session = Depends(get_db)):
             "b_wins": sum(1 for v in comparison.values() if v["winner"] == "B"),
             "ties": sum(1 for v in comparison.values() if v["winner"] == "tie"),
         },
+    }
+
+
+class OptimizationRequest(BaseModel):
+    start_date: str
+    end_date: str
+    initial_capital: float = 100000.0
+    benchmark_symbol: str = "510050"
+    param_grid: dict[str, list[Any]] = Field(
+        ...,
+        description='Parameter grid, e.g. {"max_holdings": [3, 5, 7], "max_concentration": [0.2, 0.3, 0.4]}',
+    )
+    metric: str = Field(
+        default="sharpe_ratio",
+        description="Metric to optimise: sharpe_ratio, cagr, total_return, max_drawdown, volatility",
+    )
+
+
+def _run_single_backtest(
+    strategy_params: dict,
+    start_date: str,
+    end_date: str,
+    initial_capital: float,
+    benchmark_symbol: str,
+) -> dict:
+    """Isolated DB session for thread-pool safety."""
+    from app.db.base import SessionLocal
+
+    db = SessionLocal()
+    try:
+        config = StrategyConfig(
+            name="optimization",
+            version="v1",
+            parameters=strategy_params,
+        )
+        db.add(config)
+        db.flush()
+
+        bt_config = BacktestConfig(
+            strategy_config_id=config.id,
+            start_date=date_type.fromisoformat(start_date),
+            end_date=date_type.fromisoformat(end_date),
+            initial_capital=initial_capital,
+            cost_model={"commission": 0.0003, "slippage": 0.001},
+            benchmark_symbol=benchmark_symbol,
+        )
+        db.add(bt_config)
+        db.flush()
+
+        engine = BacktestEngine(db)
+        run = engine.run(bt_config)
+        db.commit()
+
+        metrics = {
+            m.metric_name: m.value
+            for m in db.execute(
+                select(PerformanceMetric).where(PerformanceMetric.run_id == run.id)
+            ).scalars().all()
+        }
+        return {"params": strategy_params, "run_id": run.id, "metrics": metrics}
+    except Exception as exc:
+        db.rollback()
+        return {"params": strategy_params, "run_id": None, "metrics": {}, "error": str(exc)}
+    finally:
+        db.close()
+
+
+@router.post("/optimize")
+def run_optimization(req: OptimizationRequest, db: Session = Depends(get_db)):
+    param_names = list(req.param_grid.keys())
+    param_values = list(req.param_grid.values())
+    combinations = list(itertools.product(*param_values))
+
+    if len(combinations) > 500:
+        return {"error": f"Grid too large ({len(combinations)} combinations). Max 500."}
+
+    strategy_params_list = [dict(zip(param_names, combo)) for combo in combinations]
+
+    results: list[dict] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(strategy_params_list))) as pool:
+        futures = {
+            pool.submit(
+                _run_single_backtest,
+                params,
+                req.start_date,
+                req.end_date,
+                req.initial_capital,
+                req.benchmark_symbol,
+            ): params
+            for params in strategy_params_list
+        }
+        for future in concurrent.futures.as_completed(futures):
+            results.append(future.result())
+
+    successful = [r for r in results if r.get("run_id") is not None]
+    errors = [r for r in results if r.get("error")]
+
+    if not successful:
+        return {"error": "All backtest runs failed", "details": errors}
+
+    # Rank by chosen metric (higher is better; negate drawdown/volatility)
+    lower_is_better = {"max_drawdown", "volatility"}
+
+    def sort_key(r):
+        val = r["metrics"].get(req.metric, 0)
+        return -val if req.metric in lower_is_better else val
+
+    successful.sort(key=sort_key, reverse=True)
+    best = successful[0]
+
+    return {
+        "total_combinations": len(combinations),
+        "successful_runs": len(successful),
+        "failed_runs": len(errors),
+        "optimization_metric": req.metric,
+        "best_params": best["params"],
+        "best_run_id": best["run_id"],
+        "best_metrics": best["metrics"],
+        "all_results": [
+            {"params": r["params"], "run_id": r["run_id"], "metrics": r["metrics"]}
+            for r in successful
+        ],
     }

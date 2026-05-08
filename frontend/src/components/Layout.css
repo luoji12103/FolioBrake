@@ -275,6 +275,56 @@
 
   .sidebar {
     display: none;
+    position: fixed;
+    top: 56px;
+    left: 0;
+    bottom: 0;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform var(--duration-slow) var(--ease-out);
+    width: 260px;
+    box-shadow: var(--shadow-lg);
+    touch-action: pan-y;
+  }
+
+  .sidebar.sidebar-open {
+    display: flex;
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: fadeIn var(--duration-normal) var(--ease-out);
+    touch-action: manipulation;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .hamburger {
+    display: flex;
+  }
+
+  .main {
+    padding: var(--space-4);
+  }
+
+  .header {
+    padding: 0 var(--space-4);
+  }
+
+  .alerts-panel {
+    width: calc(100vw - var(--space-8));
+    right: calc(-1 * var(--space-2));
+    max-height: 60vh;
   }
 }
 
@@ -295,6 +345,11 @@
   padding: var(--space-1);
   border-radius: var(--radius-sm);
   transition: background var(--duration-fast);
+  touch-action: manipulation;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
 }
 
 .hamburger:hover {
@@ -326,50 +381,4 @@
 
 .sidebar-overlay {
   display: none;
-}
-
-@media (max-width: 768px) {
-  .hamburger {
-    display: flex;
-  }
-
-  .sidebar {
-    position: fixed;
-    top: 56px;
-    left: 0;
-    bottom: 0;
-    z-index: 100;
-    transform: translateX(-100%);
-    transition: transform var(--duration-slow) var(--ease-out);
-    width: 260px;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .sidebar.sidebar-open {
-    transform: translateX(0);
-  }
-
-  .sidebar-overlay {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 99;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    animation: fadeIn var(--duration-normal) var(--ease-out);
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
-  .main {
-    padding: var(--space-4);
-  }
 }
