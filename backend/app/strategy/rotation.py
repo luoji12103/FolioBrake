@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.strategy.models import StrategyConfig, StrategyRun, Signal, TargetPortfolio, ExplanationLog
 from app.features.registry import FeatureRegistry
 from app.data.models import Instrument
+from app.risk.models import RiskAlert
 from app.strategy.constraints import (
     apply_concentration_limit, apply_turnover_limit,
     apply_min_positions, apply_max_drawdown_check,
@@ -150,6 +151,18 @@ class RiskAwareETFRotationV1:
             self.db.add(tp)
 
         self.db.flush()
+
+        buy_count = sum(1 for p in portfolio)
+        sell_count = len(universe) - buy_count
+        alert = RiskAlert(
+            alert_type="SIGNAL_GENERATED",
+            severity="INFO",
+            title="New Trading Signals Generated",
+            message=f"Strategy run {srun.id}: {buy_count} BUY signals, {sell_count} SELL signals generated on {as_of_date}",
+        )
+        self.db.add(alert)
+        self.db.flush()
+
         return {
             "run_id": srun.id,
             "portfolio": portfolio,

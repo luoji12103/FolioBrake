@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { healthCheck } from "../api/client";
-import { useRiskState, useSignals, usePortfolio, usePaperPortfolios, usePaperPerformance } from "../api/hooks";
+import { useRiskState, useSignals, usePortfolio, usePaperPortfolios, usePaperPerformance, useRealtimePrices } from "../api/hooks";
 import { EquityChart, DrawdownChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import "./shared.css";
@@ -9,7 +9,7 @@ function DashboardSkeleton() {
   return (
     <div style={{ marginTop: 4 }}>
       <div className="metric-grid">
-        {Array.from({ length: 4 }).map((_, i) => (
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="skeleton-card">
             <div className="skeleton" style={{ width: "40%", height: 12 }} />
             <div className="skeleton" style={{ width: "65%", height: 28 }} />
@@ -29,6 +29,7 @@ function Dashboard() {
   const { data: portfolio } = usePortfolio();
   const { data: portfolios } = usePaperPortfolios();
   const { data: performance } = usePaperPerformance(portfolios?.[0]?.id?.toString() || null);
+  const { data: priceUpdate, connected: wsConnected } = useRealtimePrices();
 
   const fetchHealth = () => {
     setError(null);
@@ -98,6 +99,42 @@ function Dashboard() {
           <div className="metric-card">
             <div className="metric-label">Next Rebalance</div>
             <div className="metric-value" style={{ fontSize: "var(--text-xl)" }}>Friday</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">
+              Live Price
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: wsConnected ? "var(--color-green)" : "var(--color-red)",
+                  marginLeft: 6,
+                  verticalAlign: "middle",
+                }}
+              />
+            </div>
+            <div className="metric-value" style={{ fontSize: "var(--text-xl)" }}>
+              {priceUpdate ? (
+                <>
+                  <span style={{ color: "var(--color-accent)" }}>{priceUpdate.symbol}</span>
+                  <span style={{ marginLeft: 6 }}>{priceUpdate.price.toFixed(3)}</span>
+                  <span
+                    style={{
+                      fontSize: "var(--text-sm)",
+                      marginLeft: 6,
+                      color: priceUpdate.change >= 0 ? "var(--color-green)" : "var(--color-red)",
+                    }}
+                  >
+                    {priceUpdate.change >= 0 ? "+" : ""}
+                    {priceUpdate.change_pct.toFixed(2)}%
+                  </span>
+                </>
+              ) : (
+                <span style={{ color: "var(--color-text-dim)" }}>{"\u2014"}</span>
+              )}
+            </div>
           </div>
         </div>
       )}

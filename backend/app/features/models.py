@@ -13,6 +13,7 @@ class FeatureDefinition(Base):
     category: Mapped[str] = mapped_column(String(50), nullable=False)
     lookback_days: Mapped[int] = mapped_column(Integer, nullable=False)
     parameters: Mapped[dict] = mapped_column(JSON, default=dict)
+    timeframe: Mapped[str] = mapped_column(String(20), nullable=False, default="daily")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

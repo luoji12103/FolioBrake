@@ -2,6 +2,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import List
 import asyncio
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -66,3 +69,53 @@ async def broadcast_risk_change(old_state: str, new_state: str, reason: str):
             "reason": reason
         }
     })
+
+
+async def price_broadcaster():
+    """Background task to broadcast price updates every 30 seconds."""
+    while True:
+        try:
+            # Only run if there are connected clients
+            if not price_manager.active_connections:
+                await asyncio.sleep(30)
+                continue
+
+            from app.db.base import SessionLocal
+            from app.data.models import DailyBar, Instrument
+            from sqlalchemy import select
+
+            db = SessionLocal()
+            try:
+                instruments = list(db.execute(select(Instrument)).scalars().all())
+                for inst in instruments:
+                    bars = list(
+                        db.execute(
+                            select(DailyBar)
+                            .where(DailyBar.instrument_id == inst.id)
+                            .order_by(DailyBar.trade_date.desc())
+                            .limit(2)
+                        ).scalars().all()
+                    )
+
+                    if bars and len(bars) >= 1:
+                        latest = bars[0]
+                        previous = bars[1] if len(bars) > 1 else None
+
+                        change = 0.0
+                        change_pct = 0.0
+                        if previous and previous.close > 0:
+                            change = latest.close - previous.close
+                            change_pct = (change / previous.close) * 100
+
+                        await broadcast_price_update(
+                            symbol=inst.symbol,
+                            price=latest.close,
+                            change=round(change, 4),
+                            change_pct=round(change_pct, 2),
+                        )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Price broadcaster error: {e}")
+
+        await asyncio.sleep(30)

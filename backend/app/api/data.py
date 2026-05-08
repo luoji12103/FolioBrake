@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.data.adapter import AKShareAdapter
 from app.data.models import DailyBar, Instrument
-from app.data.sync import DataSyncService
+from app.data.source_manager import get_source_manager
+from app.data.sync import DataSyncService, sync_progress
 from app.db.base import get_db
 
 router = APIRouter(tags=["data"])
@@ -73,6 +74,15 @@ class SyncSummary(BaseModel):
     details: list[dict]
 
 
+class SyncProgressOut(BaseModel):
+    instrument_id: int
+    progress: int
+    total: int
+    synced: int
+    status: str
+    error: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -105,6 +115,19 @@ def sync_data(
         symbols_processed=len(payload.symbols),
         total_bars_synced=total_bars,
         details=details,
+    )
+
+
+@router.get("/sync-progress/{instrument_id}", response_model=SyncProgressOut)
+def get_sync_progress(instrument_id: int) -> SyncProgressOut:
+    info = sync_progress.get(instrument_id)
+    return SyncProgressOut(
+        instrument_id=instrument_id,
+        progress=info.get("progress", 0),
+        total=info.get("total", 0),
+        synced=info.get("synced", 0),
+        status=info.get("status", "idle"),
+        error=info.get("error"),
     )
 
 
@@ -306,6 +329,28 @@ def get_data_sources(db: Session = Depends(get_db)):
             for f in freshness
         ],
     }
+
+
+@router.get("/sources/health")
+async def get_sources_health():
+    """Live health check of all data sources with failover status."""
+    manager = get_source_manager()
+    sources = await manager.health_check_all()
+    healthy_count = sum(1 for s in sources if s["healthy"])
+    return {
+        "healthy_count": healthy_count,
+        "total_count": len(sources),
+        "all_healthy": healthy_count == len(sources),
+        "sources": sources,
+    }
+
+
+@router.get("/sources/status")
+def get_sources_status():
+    """Snapshot of data source health without performing network probes."""
+    manager = get_source_manager()
+    sources = manager.get_status_snapshot()
+    return {"sources": sources}
 
 
 # ---------------------------------------------------------------------------

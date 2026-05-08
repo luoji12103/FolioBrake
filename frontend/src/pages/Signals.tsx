@@ -228,8 +228,8 @@ function Signals() {
       const weights: Record<string, number> = {};
       portfolio.forEach((p: any) => { weights[String(p.instrument_id)] = p.target_weight; });
       const today = new Date().toISOString().slice(0, 10);
-      await api.post("/paper/apply-signal", { portfolio_id: pid, signal_date: today, target_weights: weights });
-      setApplyMsg(`Applied ${portfolio.length} positions to paper portfolio #${pid}.`);
+      const { data: result } = await api.post("/paper/apply-signal", { portfolio_id: pid, signal_date: today, target_weights: weights });
+      setApplyMsg(`Executed ${result.applied} trades on paper portfolio #${pid}.`);
     } catch (e: any) {
       setApplyMsg(`Error: ${e?.response?.data?.detail || e.message}`);
     } finally { setApplying(false); }

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { usePaperHoldings, usePaperPnl, PaperHolding } from "../api/hooks";
+import api from "../api/client";
 import "./shared.css";
 
 function fmtCurrency(v: number): string {
@@ -216,22 +217,388 @@ function OrderHistory() {
   );
 }
 
-function ApplySignalButton() {
+interface RebalanceTrade {
+  symbol: string;
+  side: string;
+  current_value: number;
+  target_value: number;
+  delta: number;
+  estimated_cost: number;
+}
+
+interface RebalancePreview {
+  portfolio_id: number;
+  total_value: number;
+  estimated_total_cost: number;
+  cost_pct_of_value: number;
+  trades: RebalanceTrade[];
+  trade_count: number;
+}
+
+function RebalanceDialog({
+  portfolioId,
+  targetWeights,
+  signalDate,
+  onClose,
+  onExecuted,
+}: {
+  portfolioId: string;
+  targetWeights: Record<string, number>;
+  signalDate: string;
+  onClose: () => void;
+  onExecuted: () => void;
+}) {
+  const [preview, setPreview] = useState<RebalancePreview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const [execResult, setExecResult] = useState<{
+    orders_executed: number;
+  } | null>(null);
+
+  useEffect(() => {
+    api
+      .post("/paper/preview-rebalance", {
+        portfolio_id: Number(portfolioId),
+        signal_date: signalDate,
+        target_weights: targetWeights,
+      })
+      .then((res) => setPreview(res.data))
+      .catch((err) =>
+        setError(err.response?.data?.detail || err.message)
+      )
+      .finally(() => setLoading(false));
+  }, [portfolioId, signalDate, targetWeights]);
+
+  const handleExecute = async () => {
+    setExecuting(true);
+    setError(null);
+    try {
+      const res = await api.post("/paper/execute-rebalance", {
+        portfolio_id: Number(portfolioId),
+        signal_date: signalDate,
+        target_weights: targetWeights,
+      });
+      setExecResult(res.data);
+      onExecuted();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ||
+            "Execution failed";
+      setError(msg);
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h3>
+            {execResult
+              ? "Rebalance Complete"
+              : "Confirm Rebalance"}
+          </h3>
+          <button className="modal-close" onClick={onClose}>
+            &times;
+          </button>
+        </div>
+
+        {loading && (
+          <div style={{ textAlign: "center", padding: "var(--space-8)" }}>
+            <div className="state-loading-icon" />
+            <p
+              style={{
+                marginTop: "var(--space-3)",
+                color: "var(--color-text-dim)",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              Calculating preview...
+            </p>
+          </div>
+        )}
+
+        {error && (
+          <div className="state-banner state-error">
+            {error}
+          </div>
+        )}
+
+        {execResult && (
+          <div style={{ textAlign: "center", padding: "var(--space-4)" }}>
+            <div
+              style={{
+                fontSize: 40,
+                marginBottom: "var(--space-3)",
+              }}
+            >
+              {"\u2705"}
+            </div>
+            <p
+              style={{
+                fontSize: "var(--text-base)",
+                fontWeight: 600,
+                color: "var(--color-green)",
+              }}
+            >
+              {execResult.orders_executed} order
+              {execResult.orders_executed !== 1 ? "s" : ""}{" "}
+              executed successfully
+            </p>
+          </div>
+        )}
+
+        {preview && !execResult && (
+          <>
+            <div
+              className="metrics-grid"
+              style={{
+                gridTemplateColumns: "1fr 1fr 1fr",
+                marginBottom: "var(--space-4)",
+              }}
+            >
+              <div>
+                <div className="metric-label">Portfolio Value</div>
+                <div
+                  style={{
+                    fontSize: "var(--text-base)",
+                    fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {fmtCurrency(preview.total_value)}
+                </div>
+              </div>
+              <div>
+                <div className="metric-label">Trades</div>
+                <div
+                  style={{
+                    fontSize: "var(--text-base)",
+                    fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {preview.trade_count}
+                </div>
+              </div>
+              <div>
+                <div className="metric-label">Est. Cost</div>
+                <div
+                  style={{
+                    fontSize: "var(--text-base)",
+                    fontWeight: 600,
+                    color: "var(--color-yellow)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {fmtCurrency(preview.estimated_total_cost)}
+                  <span
+                    style={{
+                      fontSize: "var(--text-xs)",
+                      marginLeft: "var(--space-1)",
+                      color: "var(--color-text-dim)",
+                    }}
+                  >
+                    ({preview.cost_pct_of_value}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {preview.trades.length > 0 ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Symbol</th>
+                      <th>Side</th>
+                      <th>Current</th>
+                      <th>Target</th>
+                      <th>Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.trades.map((t) => (
+                      <tr key={t.symbol}>
+                        <td
+                          style={{
+                            fontWeight: 600,
+                            color: "var(--color-accent)",
+                          }}
+                        >
+                          {t.symbol}
+                        </td>
+                        <td>
+                          <span
+                            className={`badge ${t.side === "BUY" ? "badge-buy" : "badge-sell"}`}
+                          >
+                            {t.side}
+                          </span>
+                        </td>
+                        <td style={{ fontVariantNumeric: "tabular-nums" }}>
+                          {fmtCurrency(t.current_value)}
+                        </td>
+                        <td style={{ fontVariantNumeric: "tabular-nums" }}>
+                          {fmtCurrency(t.target_value)}
+                        </td>
+                        <td
+                          style={{
+                            fontVariantNumeric: "tabular-nums",
+                            fontWeight: 500,
+                            color:
+                              t.delta >= 0
+                                ? "var(--color-green)"
+                                : "var(--color-red)",
+                          }}
+                        >
+                          {t.delta >= 0 ? "+" : ""}
+                          {fmtCurrency(t.delta)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div
+                className="state-banner state-empty"
+                style={{ marginBottom: 0 }}
+              >
+                Portfolio is already balanced. No trades needed.
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="modal-footer">
+          {execResult ? (
+            <button className="btn btn-primary" onClick={onClose}>
+              Done
+            </button>
+          ) : (
+            <>
+              <button className="btn" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                className="btn-danger"
+                onClick={handleExecute}
+                disabled={
+                  executing || loading || !preview || preview.trade_count === 0
+                }
+              >
+                {executing ? "Executing..." : "Execute Rebalance"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RebalanceButton({ portfolioId }: { portfolioId: string }) {
+  const [open, setOpen] = useState(false);
+  const [targetWeights, setTargetWeights] = useState<Record<
+    string,
+    number
+  > | null>(null);
+  const [loadingWeights, setLoadingWeights] = useState(false);
+  const [weightError, setWeightError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const fetchWeights = useCallback(async () => {
+    setLoadingWeights(true);
+    setWeightError(null);
+    try {
+      const { data } = await api.get("/strategy/portfolio");
+      if (!data || data.length === 0) {
+        setWeightError(
+          "No strategy portfolio found. Run the strategy first."
+        );
+        return;
+      }
+      const weights: Record<string, number> = {};
+      for (const p of data) {
+        weights[String(p.instrument_id)] = p.target_weight;
+      }
+      setTargetWeights(weights);
+      setOpen(true);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to fetch strategy weights";
+      setWeightError(msg);
+    } finally {
+      setLoadingWeights(false);
+    }
+  }, []);
+
+  const signalDate = new Date().toISOString().slice(0, 10);
+
   return (
     <div className="card">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-4)" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "var(--space-4)",
+        }}
+      >
         <div>
-          <h3 style={{ fontSize: "var(--text-base)", fontWeight: 600, marginBottom: "var(--space-1)" }}>
-            Apply Latest Signals
+          <h3
+            style={{
+              fontSize: "var(--text-base)",
+              fontWeight: 600,
+              marginBottom: "var(--space-1)",
+            }}
+          >
+            Rebalance Portfolio
           </h3>
-          <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)" }}>
-            Execute trades based on the most recent weekly signals.
+          <p
+            style={{
+              fontSize: "var(--text-sm)",
+              color: "var(--color-text-dim)",
+            }}
+          >
+            Execute trades to match the latest strategy target weights.
           </p>
         </div>
-        <button className="btn btn-primary" disabled title="Coming soon">
-          Apply Signal
+        <button
+          className="btn-primary"
+          onClick={fetchWeights}
+          disabled={loadingWeights}
+        >
+          {loadingWeights ? "Loading..." : "Rebalance"}
         </button>
       </div>
+      {weightError && (
+        <div
+          className="state-banner state-error"
+          style={{ marginTop: "var(--space-3)", marginBottom: 0 }}
+        >
+          {weightError}
+        </div>
+      )}
+      {open && targetWeights && (
+        <RebalanceDialog
+          key={refreshKey}
+          portfolioId={portfolioId}
+          targetWeights={targetWeights}
+          signalDate={signalDate}
+          onClose={() => setOpen(false)}
+          onExecuted={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }
@@ -282,7 +649,7 @@ function Paper() {
       {!isLoading && !error && pnl && (
         <>
           <PortfolioSummary pnl={pnl} />
-          <ApplySignalButton />
+          <RebalanceButton portfolioId={portfolioId} />
           <HoldingsTable holdings={holdings || []} />
           <button
             className="btn-secondary"

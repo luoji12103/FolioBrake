@@ -1,4 +1,11 @@
 import { useState, useEffect } from "react";
+import {
+  useStrategyConfigs,
+  StrategyConfigEntry,
+  createStrategyConfig,
+  updateStrategyConfig,
+  deleteStrategyConfig,
+} from "../api/hooks";
 import "./shared.css";
 
 interface SettingsState {
@@ -63,6 +70,248 @@ function SettingsSkeleton() {
         <div className="skeleton" style={{ height: 12, width: "30%", marginBottom: "var(--space-3)" }} />
         <div className="skeleton" style={{ height: 42, width: "100%" }} />
       </div>
+    </div>
+  );
+}
+
+function StrategyConfigSection() {
+  const { data: configs, isLoading, refetch } = useStrategyConfigs();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editingParams, setEditingParams] = useState("");
+  const [editingName, setEditingName] = useState("");
+  const [editingVersion, setEditingVersion] = useState("v1");
+  const [editingRiskProfile, setEditingRiskProfile] = useState("balanced");
+  const [isCreating, setIsCreating] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  const selected = configs?.find((c) => c.id === selectedId) ?? null;
+
+  const showToast = (type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const startCreate = () => {
+    setIsCreating(true);
+    setSelectedId(null);
+    setEditingName("");
+    setEditingVersion("v1");
+    setEditingRiskProfile("balanced");
+    setEditingParams(JSON.stringify({ max_holdings: 5, max_concentration: 0.30, min_positions: 3, max_turnover: 0.50 }, null, 2));
+    setJsonError(null);
+  };
+
+  const startEdit = (config: StrategyConfigEntry) => {
+    setIsCreating(false);
+    setSelectedId(config.id);
+    setEditingName(config.name);
+    setEditingVersion(config.version);
+    setEditingRiskProfile(config.risk_profile);
+    setEditingParams(JSON.stringify(config.parameters, null, 2));
+    setJsonError(null);
+  };
+
+  const handleSave = async () => {
+    let parsed: Record<string, any>;
+    try {
+      parsed = JSON.parse(editingParams);
+      setJsonError(null);
+    } catch {
+      setJsonError("Invalid JSON");
+      return;
+    }
+
+    try {
+      if (isCreating) {
+        await createStrategyConfig({
+          name: editingName || "untitled",
+          version: editingVersion,
+          parameters: parsed,
+          risk_profile: editingRiskProfile,
+        });
+        showToast("success", "Config created");
+      } else if (selectedId) {
+        await updateStrategyConfig(selectedId, {
+          name: editingName,
+          version: editingVersion,
+          parameters: parsed,
+          risk_profile: editingRiskProfile,
+        });
+        showToast("success", "Config updated");
+      }
+      setIsCreating(false);
+      setSelectedId(null);
+      refetch();
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.detail || "Save failed");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteStrategyConfig(id);
+      showToast("success", "Config deleted");
+      if (selectedId === id) {
+        setSelectedId(null);
+        setIsCreating(false);
+      }
+      refetch();
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.detail || "Delete failed");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="card">
+        <div className="card-title">Strategy Configuration</div>
+        <div className="skeleton" style={{ height: 36, width: "100%", marginBottom: "var(--space-3)" }} />
+        <div className="skeleton" style={{ height: 36, width: "60%" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">Strategy Configuration</div>
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginBottom: "var(--space-4)" }}>
+        Manage strategy parameter presets. Select a config to edit, or create a new one.
+      </p>
+
+      <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ minWidth: 260, flex: "0 0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-3)" }}>
+            <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-muted)" }}>
+              Saved Configs ({configs?.length ?? 0})
+            </span>
+            <button className="btn btn-secondary" style={{ fontSize: "var(--text-xs)", padding: "4px 10px" }} onClick={startCreate}>
+              + New
+            </button>
+          </div>
+
+          {(!configs || configs.length === 0) ? (
+            <div style={{ padding: "var(--space-4)", background: "var(--color-surface-raised)", borderRadius: "var(--radius-md)", textAlign: "center", color: "var(--color-text-dim)", fontSize: "var(--text-sm)" }}>
+              No configs yet. Create one to get started.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              {configs.map((c) => (
+                <div
+                  key={c.id}
+                  onClick={() => startEdit(c)}
+                  style={{
+                    padding: "var(--space-3)",
+                    background: selectedId === c.id && !isCreating ? "var(--color-accent-dim)" : "var(--color-surface-raised)",
+                    border: `1px solid ${selectedId === c.id && !isCreating ? "var(--color-accent)" : "var(--color-border-subtle)"}`,
+                    borderRadius: "var(--radius-md)",
+                    cursor: "pointer",
+                    transition: "all var(--duration-fast)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontWeight: 600, fontSize: "var(--text-sm)", color: "var(--color-text)" }}>{c.name}</span>
+                    <span className="badge" style={{ fontSize: "var(--text-xs)" }}>{c.version}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "var(--space-1)" }}>
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-dim)" }}>
+                      {c.risk_profile} · {Object.keys(c.parameters).length} params
+                    </span>
+                    <button
+                      className="btn"
+                      style={{ fontSize: "var(--text-xs)", padding: "2px 8px", color: "var(--color-red)", background: "transparent" }}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {(selected || isCreating) && (
+          <div style={{ flex: 1, minWidth: 300 }}>
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-muted)", marginBottom: "var(--space-3)" }}>
+              {isCreating ? "New Configuration" : `Editing: ${selected?.name}`}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="cfg-name">Name</label>
+              <input
+                id="cfg-name"
+                className="form-input"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                placeholder="e.g. conservative_v2"
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+              <div className="form-group">
+                <label htmlFor="cfg-version">Version</label>
+                <input
+                  id="cfg-version"
+                  className="form-input"
+                  value={editingVersion}
+                  onChange={(e) => setEditingVersion(e.target.value)}
+                  placeholder="v1"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="cfg-risk">Risk Profile</label>
+                <select
+                  id="cfg-risk"
+                  className="form-input"
+                  value={editingRiskProfile}
+                  onChange={(e) => setEditingRiskProfile(e.target.value)}
+                >
+                  <option value="conservative">Conservative</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="aggressive">Aggressive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="cfg-params">Parameters (JSON)</label>
+              <textarea
+                id="cfg-params"
+                className="form-input"
+                rows={10}
+                value={editingParams}
+                onChange={(e) => { setEditingParams(e.target.value); setJsonError(null); }}
+                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", resize: "vertical" }}
+                placeholder='{ "max_holdings": 5 }'
+              />
+              {jsonError && (
+                <p style={{ fontSize: "var(--text-xs)", color: "var(--color-red)", marginTop: "var(--space-1)" }}>
+                  {jsonError}
+                </p>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+              <button className="btn btn-primary" onClick={handleSave}>
+                {isCreating ? "Create Config" : "Save Changes"}
+              </button>
+              <button
+                className="btn"
+                onClick={() => { setSelectedId(null); setIsCreating(false); setJsonError(null); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {toast && (
+        <span className={`toast toast-${toast.type}`} style={{ marginTop: "var(--space-3)" }}>
+          {toast.type === "success" ? "\u2713" : "\u2717"} {toast.msg}
+        </span>
+      )}
     </div>
   );
 }
@@ -235,6 +484,8 @@ function Settings() {
           </div>
         </div>
       </div>
+
+      <StrategyConfigSection />
 
       <div
         style={{

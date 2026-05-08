@@ -492,6 +492,129 @@ export function usePaperPerformance(portfolioId: string | null) {
 }
 
 // ---------------------------------------------------------------------------
+// Strategy Configs
+// ---------------------------------------------------------------------------
+
+export interface StrategyConfigEntry {
+  id: number;
+  name: string;
+  version: string;
+  parameters: Record<string, any>;
+  universe_filter: Record<string, any>;
+  risk_profile: string;
+  created_at: string | null;
+}
+
+export function useStrategyConfigs() {
+  return useQuery(async () => {
+    const { data } = await api.get("/strategy/configs");
+    return data as StrategyConfigEntry[];
+  });
+}
+
+export async function createStrategyConfig(payload: {
+  name: string;
+  version?: string;
+  parameters?: Record<string, any>;
+  universe_filter?: Record<string, any>;
+  risk_profile?: string;
+}): Promise<StrategyConfigEntry> {
+  const { data } = await api.post("/strategy/configs", payload);
+  return data as StrategyConfigEntry;
+}
+
+export async function updateStrategyConfig(
+  configId: number,
+  payload: {
+    name?: string;
+    version?: string;
+    parameters?: Record<string, any>;
+    universe_filter?: Record<string, any>;
+    risk_profile?: string;
+  }
+): Promise<StrategyConfigEntry> {
+  const { data } = await api.put(`/strategy/configs/${configId}`, payload);
+  return data as StrategyConfigEntry;
+}
+
+export async function deleteStrategyConfig(configId: number): Promise<void> {
+  await api.delete(`/strategy/configs/${configId}`);
+}
+
+// ---------------------------------------------------------------------------
+// WebSocket — real-time price & risk updates
+// ---------------------------------------------------------------------------
+
+export interface PriceUpdate {
+  symbol: string;
+  price: number;
+  change: number;
+  change_pct: number;
+}
+
+interface WebSocketMessage {
+  type: string;
+  data: unknown;
+}
+
+function useWebSocket<T>(path: string) {
+  const [data, setData] = useState<T | null>(null);
+  const [connected, setConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function connect() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}${path}`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (!cancelled) setConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        if (cancelled) return;
+        try {
+          const msg = JSON.parse(event.data) as WebSocketMessage;
+          if (msg.type === "PRICE_UPDATE" || msg.type === "RISK_STATE_CHANGE") {
+            setData(msg.data as T);
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      };
+
+      ws.onclose = () => {
+        if (cancelled) return;
+        setConnected(false);
+        reconnectTimer.current = setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      wsRef.current?.close();
+    };
+  }, [path]);
+
+  return { data, connected };
+}
+
+export function useRealtimePrices() {
+  return useWebSocket<PriceUpdate>("/ws/prices");
+}
+
+// ---------------------------------------------------------------------------
 // Mutation hook (for POST / PUT / DELETE requests)
 // ---------------------------------------------------------------------------
 
@@ -541,4 +664,44 @@ export function useMutation<T>(
   }, []);
 
   return { data, error, isLoading, mutate, reset };
+}
+
+// ---------------------------------------------------------------------------
+// Sync Progress (polling)
+// ---------------------------------------------------------------------------
+
+export interface SyncProgress {
+  instrument_id: number;
+  progress: number;
+  total: number;
+  synced: number;
+  status: string;
+  error: string | null;
+}
+
+export function useSyncProgress(instrumentId: number | null, active: boolean) {
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+
+  useEffect(() => {
+    if (!instrumentId || !active) {
+      setProgress(null);
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/data/sync-progress/${instrumentId}`);
+        setProgress(data as SyncProgress);
+        if (data.status === "done" || data.status === "error") {
+          clearInterval(interval);
+        }
+      } catch {
+        // endpoint might not be ready yet
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [instrumentId, active]);
+
+  return progress;
 }

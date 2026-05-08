@@ -134,9 +134,43 @@ def preview_rebalance(req: PreviewRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/execute-rebalance")
+def execute_rebalance(req: PreviewRequest, db: Session = Depends(get_db)):
+    """Execute rebalance: perform trades to reach target weights."""
+    from app.audit.models import AuditRun
+
+    engine = PaperTradingEngine(db)
+    pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == req.portfolio_id)).scalar_one_or_none()
+    if not pf:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    latest_audit = db.execute(
+        select(AuditRun).order_by(desc(AuditRun.id)).limit(1)
+    ).scalar_one_or_none()
+    if latest_audit and latest_audit.grade != "GREEN":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Audit gatekeeper blocked: latest audit grade is {latest_audit.grade}. "
+                   f"Run audit and achieve GREEN to enable rebalancing.",
+        )
+
+    weights = {int(k): float(v) for k, v in req.target_weights.items()}
+    orders = engine.apply_signal(req.portfolio_id, date_type.fromisoformat(req.signal_date), weights)
+    db.commit()
+
+    return {
+        "portfolio_id": req.portfolio_id,
+        "orders_executed": len(orders),
+        "orders": [
+            {"instrument_id": o.instrument_id, "side": o.side,
+             "quantity": round(o.quantity, 2), "price": round(o.price, 4)}
+            for o in orders
+        ],
+    }
+
+
 @router.post("/apply-signal")
 def apply_signal(req: ApplySignalRequest, db: Session = Depends(get_db)):
-    # Gatekeeper: check latest audit grade
     from app.audit.models import AuditRun
     from sqlalchemy import desc
 
@@ -151,12 +185,30 @@ def apply_signal(req: ApplySignalRequest, db: Session = Depends(get_db)):
                    f"Run audit and achieve GREEN to enable paper trading.",
         )
 
+    pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == req.portfolio_id)).scalar_one_or_none()
+    if not pf:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
     engine = PaperTradingEngine(db)
     weights = {int(k): float(v) for k, v in req.target_weights.items()}
-    orders = engine.apply_signal(req.portfolio_id, date_type.fromisoformat(req.signal_date), weights)
-    db.commit()
-    return {"applied": len(orders), "orders": [{"instrument_id": o.instrument_id, "side": o.side,
-            "quantity": o.quantity, "price": o.price} for o in orders]}
+
+    try:
+        orders = engine.apply_signal(req.portfolio_id, date_type.fromisoformat(req.signal_date), weights)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Trade execution failed: {e}")
+
+    return {
+        "applied": len(orders),
+        "orders": [{"instrument_id": o.instrument_id, "side": o.side,
+                     "quantity": o.quantity, "price": o.price} for o in orders],
+        "portfolio_id": req.portfolio_id,
+        "signal_date": req.signal_date,
+    }
 
 
 @router.get("/holdings/{portfolio_id}")

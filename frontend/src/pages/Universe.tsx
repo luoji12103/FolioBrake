@@ -1,7 +1,7 @@
 import { useState } from "react";
 import api from "../api/client";
 import { ErrorMessage } from "../components/ErrorMessage";
-import { useInstruments, useDataHealth, Instrument } from "../api/hooks";
+import { useInstruments, useDataHealth, useSyncProgress, Instrument } from "../api/hooks";
 import "./shared.css";
 
 function formatDate(d: string | null): string {

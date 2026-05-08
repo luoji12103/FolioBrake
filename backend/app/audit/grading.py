@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.audit.models import AuditRun, AuditCheckResult
 from app.backtest.models import BacktestConfig, BacktestRun
+from app.risk.models import RiskAlert
 
 CHECK_WEIGHTS = {
     "leakage": 0.25,
@@ -131,5 +132,14 @@ class AuditGrader:
 
         audit.score = round(final_score, 1)
         audit.summary = f"Audit grade: {audit.grade} (score: {audit.score}). {'CRITICAL FAILURE: data leakage detected.' if has_critical_fail else 'All checks passed.' if final_score >= 75 else 'Some checks need attention.'}"
+
+        severity = "CRITICAL" if audit.grade == "RED" else ("WARNING" if audit.grade == "YELLOW" else "INFO")
+        self.db.add(RiskAlert(
+            alert_type="AUDIT_COMPLETE",
+            severity=severity,
+            title=f"Audit Complete: {audit.grade}",
+            message=audit.summary,
+        ))
+
         self.db.flush()
         return audit

@@ -1,26 +1,94 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
-from typing import Any
+import threading
+import time
+from datetime import date, datetime, timedelta
+from typing import Any, Callable
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.data.adapter import AKShareAdapter
 from app.data.models import DataQualityReport, DailyBar, Instrument
 from app.data.quality import DataQualityChecker
+from app.data.source_manager import DataSourceManager, get_source_manager
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# In-memory sync progress tracker
+# ---------------------------------------------------------------------------
+
+class SyncProgressTracker:
+    """Thread-safe in-memory store for sync progress per instrument."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        # instrument_id -> { progress, total, synced, status, started_at, updated_at }
+        self._store: dict[int, dict[str, Any]] = {}
+
+    def start(self, instrument_id: int, total: int) -> None:
+        with self._lock:
+            self._store[instrument_id] = {
+                "progress": 0,
+                "total": total,
+                "synced": 0,
+                "status": "syncing",
+                "started_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+
+    def update(self, instrument_id: int, synced: int) -> None:
+        with self._lock:
+            entry = self._store.get(instrument_id)
+            if entry is None:
+                return
+            entry["synced"] = synced
+            entry["progress"] = min(100, int(synced / max(entry["total"], 1) * 100))
+            entry["updated_at"] = datetime.utcnow().isoformat()
+
+    def finish(self, instrument_id: int, total_synced: int) -> None:
+        with self._lock:
+            entry = self._store.get(instrument_id)
+            if entry is None:
+                return
+            entry["synced"] = total_synced
+            entry["progress"] = 100
+            entry["status"] = "done"
+            entry["updated_at"] = datetime.utcnow().isoformat()
+
+    def error(self, instrument_id: int, message: str) -> None:
+        with self._lock:
+            entry = self._store.get(instrument_id)
+            if entry is None:
+                self._store[instrument_id] = {}
+                entry = self._store[instrument_id]
+            entry["status"] = "error"
+            entry["error"] = message
+            entry["updated_at"] = datetime.utcnow().isoformat()
+
+    def get(self, instrument_id: int) -> dict[str, Any]:
+        with self._lock:
+            return dict(self._store.get(instrument_id, {"progress": 0, "status": "idle"}))
+
+    def get_all(self) -> dict[int, dict[str, Any]]:
+        with self._lock:
+            return {k: dict(v) for k, v in self._store.items()}
+
+
+# Module-level singleton
+sync_progress = SyncProgressTracker()
 
 
 class DataSyncService:
     """Orchestrates data ingestion: instruments, daily bars, quality checks."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, manager: DataSourceManager | None = None) -> None:
         self.db = db
         self.adapter = AKShareAdapter()
+        self._manager = manager or get_source_manager()
         self.quality = DataQualityChecker()
 
     # ------------------------------------------------------------------
@@ -72,41 +140,53 @@ class DataSyncService:
         Returns:
             Number of bars inserted or updated.
         """
-        # Resolve the instrument symbol for the adapter call
+        return self.sync_daily_bars_batch(instrument_id, start, end)
+
+    def sync_daily_bars_batch(
+        self,
+        instrument_id: int,
+        start: str,
+        end: str,
+        batch_size: int = 1000,
+    ) -> int:
         inst = self.db.get(Instrument, instrument_id)
         if inst is None:
             raise ValueError(f"Instrument id={instrument_id} not found.")
 
-        records = self.adapter.fetch_etf_daily(inst.symbol, start, end)
-        source = "akshare"
-        if not records:
-            from app.data.efinance_adapter import EfinanceAdapter
-            records = EfinanceAdapter().fetch_etf_daily(inst.symbol, start, end)
-            if records:
-                source = "efinance"
-                logger.info("Using efinance fallback for %s", inst.symbol)
-        if not records:
-            from app.data.tushare_adapter import TushareAdapter
-            ts_adapter = TushareAdapter()
-            if ts_adapter.available:
-                records = ts_adapter.fetch_etf_daily(inst.symbol, start, end)
-                if records:
-                    source = "tushare"
-                    logger.info("Using tushare fallback for %s", inst.symbol)
+        last_bar = self.db.execute(
+            select(DailyBar.trade_date)
+            .where(DailyBar.instrument_id == instrument_id)
+            .order_by(DailyBar.trade_date.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
+        if last_bar is not None:
+            incremental_start = (last_bar + _ONE_DAY).strftime("%Y%m%d")
+            if incremental_start > start:
+                start = incremental_start
+                logger.info(
+                    "Incremental sync for %s: last_bar=%s, new start=%s",
+                    inst.symbol, last_bar, start,
+                )
+
+        if start > end:
+            logger.info("No new data to sync for %s (start=%s > end=%s).", inst.symbol, start, end)
+            return 0
+
+        records = self._fetch_with_fallback(inst.symbol, start, end)
         if not records:
             return 0
 
-        inserted = 0
-        for rec in records:
-            trade_date_str = rec.get("trade_date")
-            if trade_date_str is None:
-                continue
+        source = self._last_source
+        total = len(records)
+        sync_progress.start(instrument_id, total)
 
-            trade_date = _parse_date(trade_date_str)
+        prepared: list[dict[str, Any]] = []
+        for rec in records:
+            trade_date = _parse_date(rec.get("trade_date"))
             if trade_date is None:
                 continue
-
-            values: dict[str, Any] = {
+            prepared.append({
                 "instrument_id": instrument_id,
                 "trade_date": trade_date,
                 "open": rec.get("open"),
@@ -116,39 +196,46 @@ class DataSyncService:
                 "volume": rec.get("volume"),
                 "amount": rec.get("amount"),
                 "adj_close": rec.get("adj_close"),
-                "data_source": "akshare",
-            }
+                "data_source": source,
+            })
 
+        inserted = 0
+        for i in range(0, len(prepared), batch_size):
+            batch = prepared[i : i + batch_size]
             stmt = (
                 insert(DailyBar)
-                .values(**values)
+                .values(batch)
                 .on_conflict_do_update(
                     index_elements=["instrument_id", "trade_date"],
                     set_={
-                        "open": values["open"],
-                        "high": values["high"],
-                        "low": values["low"],
-                        "close": values["close"],
-                        "volume": values["volume"],
-                        "amount": values["amount"],
-                        "adj_close": values["adj_close"],
-                        "data_source": values["data_source"],
+                        "open": DailyBar.__table__.c.open,
+                        "high": DailyBar.__table__.c.high,
+                        "low": DailyBar.__table__.c.low,
+                        "close": DailyBar.__table__.c.close,
+                        "volume": DailyBar.__table__.c.volume,
+                        "amount": DailyBar.__table__.c.amount,
+                        "adj_close": DailyBar.__table__.c.adj_close,
+                        "data_source": DailyBar.__table__.c.data_source,
                         "fetched_at": datetime.utcnow(),
                     },
                 )
             )
             self.db.execute(stmt)
-            inserted += 1
+            self.db.commit()
+            inserted += len(batch)
+            sync_progress.update(instrument_id, inserted)
 
-        self.db.commit()
+        sync_progress.finish(instrument_id, inserted)
         logger.info(
             "Synced %d bars for instrument_id=%s (%s – %s).",
-            inserted,
-            instrument_id,
-            start,
-            end,
+            inserted, instrument_id, start, end,
         )
         return inserted
+
+    def _fetch_with_fallback(self, symbol: str, start: str, end: str) -> list[dict[str, Any]]:
+        records, source_name = self._manager.fetch_etf_daily(symbol, start, end)
+        self._last_source = source_name or "unknown"
+        return records
 
     # ------------------------------------------------------------------
     # Quality check
@@ -208,6 +295,9 @@ class DataSyncService:
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
+_ONE_DAY = timedelta(days=1)
+
 
 def _parse_date(raw: Any) -> date | None:
     """Parse a date from various AKShare return shapes."""

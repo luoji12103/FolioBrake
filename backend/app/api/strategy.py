@@ -1,5 +1,5 @@
 from datetime import date as date_type
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
@@ -251,3 +251,136 @@ def get_signal_history(
             "avg_return_30d": round(sum(s["subsequent_return_30d"] for s in valid_30d) / len(valid_30d), 6) if valid_30d else 0,
         },
     }
+
+
+class ConfigCreateRequest(BaseModel):
+    name: str
+    version: str = "v1"
+    parameters: dict = {}
+    universe_filter: dict = {}
+    risk_profile: str = "balanced"
+
+
+class ConfigUpdateRequest(BaseModel):
+    name: str | None = None
+    version: str | None = None
+    parameters: dict | None = None
+    universe_filter: dict | None = None
+    risk_profile: str | None = None
+
+
+@router.get("/configs")
+def list_configs(db: Session = Depends(get_db)):
+    """List all strategy configurations."""
+    configs = list(db.execute(select(StrategyConfig).order_by(StrategyConfig.id)).scalars().all())
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "version": c.version,
+            "parameters": c.parameters,
+            "universe_filter": c.universe_filter,
+            "risk_profile": c.risk_profile,
+            "created_at": str(c.created_at) if c.created_at else None,
+        }
+        for c in configs
+    ]
+
+
+@router.post("/configs")
+def create_config(req: ConfigCreateRequest, db: Session = Depends(get_db)):
+    """Create a new strategy configuration."""
+    config = StrategyConfig(
+        name=req.name,
+        version=req.version,
+        parameters=req.parameters,
+        universe_filter=req.universe_filter,
+        risk_profile=req.risk_profile,
+    )
+    db.add(config)
+    db.commit()
+    db.refresh(config)
+    return {
+        "id": config.id,
+        "name": config.name,
+        "version": config.version,
+        "parameters": config.parameters,
+        "universe_filter": config.universe_filter,
+        "risk_profile": config.risk_profile,
+        "created_at": str(config.created_at) if config.created_at else None,
+    }
+
+
+@router.get("/configs/{config_id}")
+def get_config(config_id: int, db: Session = Depends(get_db)):
+    """Get a single strategy configuration."""
+    config = db.execute(
+        select(StrategyConfig).where(StrategyConfig.id == config_id)
+    ).scalar_one_or_none()
+    if not config:
+        raise HTTPException(status_code=404, detail="Config not found")
+    return {
+        "id": config.id,
+        "name": config.name,
+        "version": config.version,
+        "parameters": config.parameters,
+        "universe_filter": config.universe_filter,
+        "risk_profile": config.risk_profile,
+        "created_at": str(config.created_at) if config.created_at else None,
+    }
+
+
+@router.put("/configs/{config_id}")
+def update_config(config_id: int, req: ConfigUpdateRequest, db: Session = Depends(get_db)):
+    """Update strategy configuration fields."""
+    config = db.execute(
+        select(StrategyConfig).where(StrategyConfig.id == config_id)
+    ).scalar_one_or_none()
+    if not config:
+        raise HTTPException(status_code=404, detail="Config not found")
+
+    if req.name is not None:
+        config.name = req.name
+    if req.version is not None:
+        config.version = req.version
+    if req.parameters is not None:
+        config.parameters = req.parameters
+    if req.universe_filter is not None:
+        config.universe_filter = req.universe_filter
+    if req.risk_profile is not None:
+        config.risk_profile = req.risk_profile
+
+    db.commit()
+    db.refresh(config)
+    return {
+        "id": config.id,
+        "name": config.name,
+        "version": config.version,
+        "parameters": config.parameters,
+        "universe_filter": config.universe_filter,
+        "risk_profile": config.risk_profile,
+        "created_at": str(config.created_at) if config.created_at else None,
+    }
+
+
+@router.delete("/configs/{config_id}")
+def delete_config(config_id: int, db: Session = Depends(get_db)):
+    """Delete a strategy configuration."""
+    config = db.execute(
+        select(StrategyConfig).where(StrategyConfig.id == config_id)
+    ).scalar_one_or_none()
+    if not config:
+        raise HTTPException(status_code=404, detail="Config not found")
+
+    runs_count = db.execute(
+        select(StrategyRun).where(StrategyRun.config_id == config_id).limit(1)
+    ).scalar_one_or_none()
+    if runs_count:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete config: strategy runs reference it. Archive instead.",
+        )
+
+    db.delete(config)
+    db.commit()
+    return {"ok": True}
