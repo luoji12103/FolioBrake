@@ -3,9 +3,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.db.base import get_db
-from app.backtest.models import BacktestRun, PerformanceMetric, PortfolioSnapshot, SimulatedTrade
-from app.paper.models import PaperPortfolio, PaperPosition, PaperLedger
-from app.data.models import DailyBar
+from app.backtest.models import BacktestRun, PerformanceMetric
+from app.paper.models import PaperPortfolio, PaperPosition
 import csv
 import io
 from datetime import datetime
