@@ -41,6 +41,76 @@ function useQuery<T>(fetcher: () => Promise<T>): QueryState<T> {
 }
 
 // ---------------------------------------------------------------------------
+// User Preferences
+// ---------------------------------------------------------------------------
+
+export interface NotificationPreferences {
+  riskAlerts: boolean;
+  signalAlerts: boolean;
+  tradeAlerts: boolean;
+  systemAlerts: boolean;
+}
+
+export interface UserPreferences {
+  theme: "dark" | "light";
+  riskProfile: "conservative" | "balanced" | "aggressive";
+  defaultPortfolioId: string;
+  notifications: NotificationPreferences;
+}
+
+const PREFS_STORAGE_KEY = "folioBrake_userPrefs";
+
+const defaultPreferences: UserPreferences = {
+  theme: "dark",
+  riskProfile: "balanced",
+  defaultPortfolioId: "",
+  notifications: {
+    riskAlerts: true,
+    signalAlerts: true,
+    tradeAlerts: true,
+    systemAlerts: false,
+  },
+};
+
+function loadPreferences(): UserPreferences {
+  try {
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...defaultPreferences,
+        ...parsed,
+        notifications: { ...defaultPreferences.notifications, ...parsed.notifications },
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return defaultPreferences;
+}
+
+export function useUserPreferences() {
+  const [prefs, setPrefs] = useState<UserPreferences>(loadPreferences);
+
+  const update = useCallback((updates: Partial<UserPreferences>) => {
+    setPrefs((prev) => {
+      const next = { ...prev, ...updates };
+      if (updates.notifications) {
+        next.notifications = { ...prev.notifications, ...updates.notifications };
+      }
+      try {
+        localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
+  return { preferences: prefs, update };
+}
+
+// ---------------------------------------------------------------------------
 // Health
 // ---------------------------------------------------------------------------
 
@@ -286,6 +356,9 @@ export function useRiskOverlay() {
 // Risk Alerts
 // ---------------------------------------------------------------------------
 
+export type AlertCategory = "risk" | "signal" | "system" | "trade";
+export type AlertPriority = "low" | "medium" | "high" | "critical";
+
 export interface RiskAlert {
   id: number;
   timestamp: string;
@@ -294,12 +367,38 @@ export interface RiskAlert {
   title: string;
   message: string;
   read: boolean;
+  category: AlertCategory;
+  priority: AlertPriority;
+}
+
+function inferCategory(alert: Partial<RiskAlert>): AlertCategory {
+  if (alert.category) return alert.category;
+  const t = (alert.type || "").toLowerCase();
+  if (t.includes("risk") || t.includes("drawdown") || t.includes("vol")) return "risk";
+  if (t.includes("signal") || t.includes("score") || t.includes("rank")) return "signal";
+  if (t.includes("trade") || t.includes("order") || t.includes("fill")) return "trade";
+  return "system";
+}
+
+function inferPriority(alert: Partial<RiskAlert>): AlertPriority {
+  if (alert.priority) return alert.priority;
+  switch (alert.severity) {
+    case "CRITICAL": return "critical";
+    case "WARNING":  return "high";
+    default:         return "medium";
+  }
 }
 
 export function useRiskAlerts() {
   return useQuery(async () => {
     const { data } = await api.get("/risk/alerts");
-    return data as { alerts: RiskAlert[]; unread_count: number };
+    const raw = data as { alerts: Partial<RiskAlert>[]; unread_count: number };
+    const alerts: RiskAlert[] = raw.alerts.map((a) => ({
+      ...a,
+      category: inferCategory(a),
+      priority: inferPriority(a),
+    })) as RiskAlert[];
+    return { alerts, unread_count: raw.unread_count };
   });
 }
 

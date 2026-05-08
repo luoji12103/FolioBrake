@@ -5,6 +5,7 @@ import {
   createStrategyConfig,
   updateStrategyConfig,
   deleteStrategyConfig,
+  useUserPreferences,
 } from "../api/hooks";
 import "./shared.css";
 
@@ -316,6 +317,86 @@ function StrategyConfigSection() {
   );
 }
 
+function NotificationPreferencesCard() {
+  const { preferences, update } = useUserPreferences();
+  const notifs = preferences.notifications;
+
+  const toggle = (key: keyof typeof notifs) => {
+    update({ notifications: { ...notifs, [key]: !notifs[key] } });
+  };
+
+  const items: { key: keyof typeof notifs; label: string; desc: string }[] = [
+    { key: "riskAlerts", label: "Risk Alerts", desc: "Drawdown, volatility, and regime changes" },
+    { key: "signalAlerts", label: "Signal Alerts", desc: "New signals and score changes" },
+    { key: "tradeAlerts", label: "Trade Alerts", desc: "Order fills and portfolio rebalancing" },
+    { key: "systemAlerts", label: "System Alerts", desc: "Data source health and connectivity" },
+  ];
+
+  return (
+    <div className="card">
+      <div className="card-title">Notification Preferences</div>
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginBottom: "var(--space-4)" }}>
+        Choose which notification categories appear in your alerts panel.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", maxWidth: 500 }}>
+        {items.map((item) => (
+          <label
+            key={item.key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "var(--space-3)",
+              background: "var(--color-surface-raised)",
+              borderRadius: "var(--radius-md)",
+              cursor: "pointer",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text)" }}>
+                {item.label}
+              </div>
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-dim)", marginTop: 2 }}>
+                {item.desc}
+              </div>
+            </div>
+            <button
+              role="switch"
+              aria-checked={notifs[item.key]}
+              onClick={() => toggle(item.key)}
+              style={{
+                width: 40,
+                height: 22,
+                borderRadius: "var(--radius-full)",
+                border: "none",
+                background: notifs[item.key] ? "var(--color-accent)" : "var(--color-border)",
+                position: "relative",
+                cursor: "pointer",
+                transition: "background var(--duration-fast)",
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: notifs[item.key] ? 20 : 3,
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  background: "var(--color-surface)",
+                  transition: "left var(--duration-fast) var(--ease-out)",
+                  boxShadow: "var(--shadow-sm)",
+                }}
+              />
+            </button>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Settings() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
@@ -484,6 +565,8 @@ function Settings() {
           </div>
         </div>
       </div>
+
+      <NotificationPreferencesCard />
 
       <StrategyConfigSection />
 

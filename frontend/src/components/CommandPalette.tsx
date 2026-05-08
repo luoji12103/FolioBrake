@@ -1,14 +1,23 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { displayShortcut } from "../hooks/useKeyboardShortcuts";
+import api from "../api/client";
 import "./CommandPalette.css";
 
 interface Command {
   id: string;
   label: string;
+  sublabel?: string;
   shortcut?: string;
   section: string;
   action: () => void;
+}
+
+interface SearchResult {
+  id: string;
+  symbol: string;
+  name: string;
+  type: string;
 }
 
 interface CommandPaletteProps {
@@ -19,6 +28,8 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ open, onClose, onToggleTheme }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -40,6 +51,34 @@ export function CommandPalette({ open, onClose, onToggleTheme }: CommandPaletteP
     [navigate, onClose, onToggleTheme]
   );
 
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const { data } = await api.get("/data/instruments", { params: { search: q } });
+      const items: SearchResult[] = (Array.isArray(data) ? data : []).slice(0, 8).map((i: any) => ({
+        id: String(i.id ?? i.symbol),
+        symbol: i.symbol,
+        name: i.name,
+        type: i.type ?? "ETF",
+      }));
+      setSearchResults(items);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => doSearch(query), 250);
+    return () => clearTimeout(timer);
+  }, [query, open, doSearch]);
+
   const filtered = useMemo(() => {
     if (!query) return commands;
     const q = query.toLowerCase();
@@ -50,14 +89,29 @@ export function CommandPalette({ open, onClose, onToggleTheme }: CommandPaletteP
     );
   }, [commands, query]);
 
+  const instrumentCommands: Command[] = useMemo(() => {
+    return searchResults.map((r) => ({
+      id: `instr-${r.id}`,
+      label: `${r.symbol} — ${r.name}`,
+      sublabel: r.type,
+      section: "Instruments",
+      action: () => navigate(`/universe?search=${r.symbol}`),
+    }));
+  }, [searchResults, navigate]);
+
+  const allItems = useMemo(() => {
+    const items: Command[] = [...filtered, ...instrumentCommands];
+    return items;
+  }, [filtered, instrumentCommands]);
+
   const grouped = useMemo(() => {
     const groups: Record<string, Command[]> = {};
-    for (const cmd of filtered) {
+    for (const cmd of allItems) {
       if (!groups[cmd.section]) groups[cmd.section] = [];
       groups[cmd.section].push(cmd);
     }
     return groups;
-  }, [filtered]);
+  }, [allItems]);
 
   useEffect(() => {
     if (open) {
@@ -84,7 +138,7 @@ export function CommandPalette({ open, onClose, onToggleTheme }: CommandPaletteP
 
   if (!open) return null;
 
-  const flatList = filtered;
+  const flatList = allItems;
 
   return (
     <div className="palette-backdrop" onClick={onClose}>
@@ -97,7 +151,7 @@ export function CommandPalette({ open, onClose, onToggleTheme }: CommandPaletteP
           <input
             ref={inputRef}
             className="palette-input"
-            placeholder="Type a command..."
+            placeholder="Search commands or instruments..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -118,8 +172,11 @@ export function CommandPalette({ open, onClose, onToggleTheme }: CommandPaletteP
         </div>
 
         <div className="palette-list" ref={listRef}>
-          {flatList.length === 0 && (
-            <div className="palette-empty">No commands found</div>
+          {searchLoading && query.length >= 2 && (
+            <div className="palette-empty">Searching instruments...</div>
+          )}
+          {flatList.length === 0 && !searchLoading && (
+            <div className="palette-empty">No results found</div>
           )}
           {Object.entries(grouped).map(([section, cmds]) => (
             <div key={section} className="palette-section">
@@ -134,7 +191,12 @@ export function CommandPalette({ open, onClose, onToggleTheme }: CommandPaletteP
                     onClick={() => executeCommand(cmd)}
                     onMouseEnter={() => setSelectedIndex(idx)}
                   >
-                    <span className="palette-item-label">{cmd.label}</span>
+                    <div className="palette-item-text">
+                      <span className="palette-item-label">{cmd.label}</span>
+                      {cmd.sublabel && (
+                        <span className="palette-item-sublabel">{cmd.sublabel}</span>
+                      )}
+                    </div>
                     {cmd.shortcut && (
                       <span className="palette-item-shortcut">
                         {displayShortcut(cmd.shortcut)}

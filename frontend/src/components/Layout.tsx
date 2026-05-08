@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { useRiskState, useRiskAlerts } from "../api/hooks";
+import { useRiskState, useRiskAlerts, type AlertCategory } from "../api/hooks";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { Kbd } from "./Kbd";
 import { CommandPalette } from "./CommandPalette";
 import { ShortcutHelper } from "./ShortcutHelper";
+import { Breadcrumb } from "./Breadcrumb";
+import { LoadingBar } from "./LoadingBar";
 import RiskBadge from "./RiskBadge";
 import "./Layout.css";
 
@@ -48,6 +50,7 @@ function Layout() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helperOpen, setHelperOpen] = useState(false);
+  const [alertFilter, setAlertFilter] = useState<AlertCategory | "all">("all");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -102,8 +105,23 @@ function Layout() {
     </>
   );
 
+  const filteredAlerts = useMemo(() => {
+    if (!alertsData) return [];
+    if (alertFilter === "all") return alertsData.alerts;
+    return alertsData.alerts.filter((a) => a.category === alertFilter);
+  }, [alertsData, alertFilter]);
+
+  const categoryFilters: { key: AlertCategory | "all"; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "risk", label: "Risk" },
+    { key: "signal", label: "Signal" },
+    { key: "trade", label: "Trade" },
+    { key: "system", label: "System" },
+  ];
+
   return (
     <div className="layout">
+      <LoadingBar />
       <header className="header">
         <div className="header-left">
           <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
@@ -148,14 +166,31 @@ function Layout() {
                   <span>Notifications</span>
                   <button className="alerts-close" onClick={() => setAlertsOpen(false)}>✕</button>
                 </div>
-                {alertsData?.alerts.map(alert => (
+                <div className="alerts-filters">
+                  {categoryFilters.map((f) => (
+                    <button
+                      key={f.key}
+                      className={`alerts-filter-btn${alertFilter === f.key ? " active" : ""}`}
+                      onClick={() => setAlertFilter(f.key)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                {filteredAlerts.map((alert) => (
                   <div key={alert.id} className={`alert-item alert-${alert.severity.toLowerCase()}`}>
-                    <div className="alert-title">{alert.title}</div>
+                    <div className="alert-title-row">
+                      <span className="alert-title">{alert.title}</span>
+                      <span className={`alert-priority alert-priority-${alert.priority}`}>{alert.priority}</span>
+                    </div>
                     <div className="alert-message">{alert.message}</div>
-                    <div className="alert-time">{new Date(alert.timestamp).toLocaleString()}</div>
+                    <div className="alert-meta">
+                      <span className={`alert-category-tag alert-category-${alert.category}`}>{alert.category}</span>
+                      <span className="alert-time">{new Date(alert.timestamp).toLocaleString()}</span>
+                    </div>
                   </div>
                 ))}
-                {(!alertsData || alertsData.alerts.length === 0) && (
+                {filteredAlerts.length === 0 && (
                   <div className="alert-empty">No notifications</div>
                 )}
               </div>
@@ -168,6 +203,7 @@ function Layout() {
       </nav>
       {menuOpen && <div className="sidebar-overlay" onClick={closeMenu} />}
       <main className="main">
+        <Breadcrumb />
         <Outlet />
       </main>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onToggleTheme={toggleTheme} />

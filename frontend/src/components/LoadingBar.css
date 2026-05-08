@@ -1,0 +1,31 @@
+.loading-bar-track {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.loading-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  box-shadow: var(--shadow-glow-accent);
+  animation: loadingBarProgress 350ms var(--ease-out) forwards;
+}
+
+@keyframes loadingBarProgress {
+  0% {
+    width: 0;
+    opacity: 1;
+  }
+  70% {
+    width: 80%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0;
+  }
+}

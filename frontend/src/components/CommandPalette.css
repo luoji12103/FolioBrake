@@ -119,6 +119,20 @@
   color: var(--color-text);
 }
 
+.palette-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.palette-item-sublabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+
 .palette-item-shortcut {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
