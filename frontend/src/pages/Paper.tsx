@@ -284,6 +284,13 @@ function Paper() {
           <PortfolioSummary pnl={pnl} />
           <ApplySignalButton />
           <HoldingsTable holdings={holdings || []} />
+          <button
+            className="btn-secondary"
+            onClick={() => window.open(`/api/reports/portfolio/1/csv`, "_blank")}
+            style={{ marginTop: "var(--space-4)" }}
+          >
+            Export CSV
+          </button>
           <OrderHistory />
         </>
       )}

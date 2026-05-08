@@ -143,6 +143,16 @@ function Backtest() {
           )}
         </div>
       )}
+
+      {results && (
+        <button
+          className="btn-secondary"
+          onClick={() => window.open(`/api/reports/backtest/${runId}/pdf`, "_blank")}
+          style={{ marginTop: "var(--space-4)" }}
+        >
+          Export Report
+        </button>
+      )}
     </div>
   );
 }

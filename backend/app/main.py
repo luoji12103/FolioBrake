@@ -10,6 +10,8 @@ from app.api.strategy import router as strategy_router
 from app.api.backtest import router as backtest_router
 from app.api.audit import router as audit_router
 from app.api.paper import router as paper_router
+from app.api.websocket import router as websocket_router
+from app.api.reports import router as reports_router
 
 FEATURE_SEEDS = [
     ("trend_sma_60", "trend", 60, {"window": 60}),
@@ -67,6 +69,8 @@ app.include_router(strategy_router, prefix="/api/strategy", tags=["strategy"])
 app.include_router(backtest_router, prefix="/api/backtest", tags=["backtest"])
 app.include_router(audit_router, prefix="/api/audit", tags=["audit"])
 app.include_router(paper_router, prefix="/api/paper", tags=["paper"])
+app.include_router(websocket_router, tags=["websocket"])
+app.include_router(reports_router, prefix="/api/reports", tags=["reports"])
 
 
 @app.get("/api/health")
