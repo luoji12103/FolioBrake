@@ -8,6 +8,7 @@ dependencies = [
   "uvicorn[standard]>=0.27",
   "pydantic>=2",
   "pydantic-settings>=2",
+  "pydantic[email]>=2",
   "sqlalchemy>=2",
   "alembic>=1.13",
   "psycopg[binary]>=3",
@@ -19,8 +20,8 @@ dependencies = [
   "akshare>=1.0",
   "efinance>=0.5",
   "matplotlib>=3.8",
-  "prometheus-client>=0.20",
-  "structlog>=24.1",
+  "structlog>=23.0",
+  "prometheus-client>=0.17",
 ]
 
 [project.optional-dependencies]
