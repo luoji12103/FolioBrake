@@ -124,20 +124,78 @@ function UniverseSkeleton() {
   );
 }
 
+function SyncProgressBar({ instrumentId, symbol }: { instrumentId: number; symbol: string }) {
+  const progress = useSyncProgress(instrumentId, true);
+
+  if (!progress || progress.status === "idle") return null;
+
+  const pct = progress.progress;
+  const isDone = progress.status === "done";
+  const isError = progress.status === "error";
+
+  return (
+    <div style={{ marginTop: "var(--space-2)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: 4 }}>
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", minWidth: 80 }}>
+          {isError ? "Error" : isDone ? "Complete" : `Syncing ${symbol}`}
+        </span>
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-dim)" }}>
+          {progress.synced.toLocaleString()} / {progress.total.toLocaleString()}
+        </span>
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-accent)", fontWeight: 600 }}>
+          {pct}%
+        </span>
+      </div>
+      <div
+        style={{
+          height: 4,
+          borderRadius: 2,
+          background: "var(--color-border)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            borderRadius: 2,
+            background: isError
+              ? "var(--color-red)"
+              : isDone
+                ? "var(--color-green)"
+                : "var(--color-accent)",
+            transition: "width 0.3s ease",
+          }}
+        />
+      </div>
+      {progress.error && (
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-red)", marginTop: 2, display: "block" }}>
+          {progress.error}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function Universe() {
   const { data: health } = useDataHealth();
   const { data: instruments, error, isLoading, refetch } = useInstruments();
   const [newSymbol, setNewSymbol] = useState("");
   const [adding, setAdding] = useState(false);
   const [addMsg, setAddMsg] = useState<string | null>(null);
+  const [syncingInstrumentId, setSyncingInstrumentId] = useState<number | null>(null);
+  const [syncingSymbol, setSyncingSymbol] = useState<string>("");
 
   const handleAdd = async () => {
     if (!newSymbol.trim()) return;
     setAdding(true); setAddMsg(null);
+    const sym = newSymbol.trim();
     try {
-      await api.post("/data/instruments", { symbol: newSymbol.trim() });
+      const { data } = await api.post("/data/instruments", { symbol: sym });
+      setSyncingInstrumentId(data.id);
+      setSyncingSymbol(sym);
       setNewSymbol("");
-      setAddMsg(`Added ${newSymbol.trim()}. Syncing data...`);
+      setAddMsg(`Added ${sym}. Syncing data...`);
       refetch();
     } catch (e: any) {
       setAddMsg(`Error: ${e?.response?.data?.detail || e.message}`);
@@ -148,22 +206,29 @@ function Universe() {
     <div className="page">
       <h2>ETF Universe</h2>
 
-      <div className="card" style={{ marginBottom: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-        <input
-          className="form-input"
-          style={{ maxWidth: 220 }}
-          placeholder="ETF symbol (e.g. 510880)"
-          value={newSymbol}
-          onChange={(e) => setNewSymbol(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-        />
-        <button className="btn-primary" onClick={handleAdd} disabled={adding}>
-          {adding ? "Adding..." : "Add ETF"}
-        </button>
-        {addMsg && (
-          <span className={`toast ${addMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
-            {addMsg}
-          </span>
+      <div className="card" style={{ marginBottom: "var(--space-4)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+          <input
+            className="form-input"
+            style={{ maxWidth: 220 }}
+            placeholder="ETF symbol (e.g. 510880)"
+            value={newSymbol}
+            onChange={(e) => setNewSymbol(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          />
+          <button className="btn-primary" onClick={handleAdd} disabled={adding}>
+            {adding ? "Adding..." : "Add ETF"}
+          </button>
+          {addMsg && (
+            <span className={`toast ${addMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
+              {addMsg}
+            </span>
+          )}
+        </div>
+        {syncingInstrumentId && (
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <SyncProgressBar instrumentId={syncingInstrumentId} symbol={syncingSymbol} />
+          </div>
         )}
       </div>
 
