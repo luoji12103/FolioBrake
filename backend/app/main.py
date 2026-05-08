@@ -14,6 +14,16 @@ from app.api.paper import router as paper_router
 from app.api.websocket import router as websocket_router
 from app.api.reports import router as reports_router
 from app.api.analysis import router as analysis_router
+from app.api.ml import router as ml_router
+from app.api.nlp import router as nlp_router
+from app.api.auth import router as auth_router
+from app.api.social import router as social_router
+from app.api.config import router as config_router
+
+from app.core.config import settings
+from app.core.logging_config import CorrelationIdMiddleware, setup_logging, get_logger
+from app.core.metrics import PrometheusMiddleware, get_metrics_response
+from app.core.rate_limit import RateLimiter
 
 FEATURE_SEEDS = [
     ("trend_sma_60", "trend", 60, {"window": 60}, "daily"),
@@ -38,6 +48,10 @@ FEATURE_SEEDS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_logging(json_format=settings.LOG_JSON, level=settings.LOG_LEVEL)
+    log = get_logger("startup")
+    log.info("starting_application", env=settings.APP_ENV)
+
     from app.db.base import SessionLocal
     from app.features.models import FeatureDefinition
     from app.api.websocket import price_broadcaster
@@ -54,6 +68,7 @@ async def lifespan(app: FastAPI):
         db.close()
 
     task = asyncio.create_task(price_broadcaster())
+    log.info("application_ready")
     yield
     task.cancel()
     try:
@@ -62,7 +77,33 @@ async def lifespan(app: FastAPI):
         pass
 
 
-app = FastAPI(title="Retail ETF Guardian API", version="0.1.0", lifespan=lifespan)
+_openapi_tags = [
+    {"name": "data", "description": "ETF data sync and retrieval"},
+    {"name": "features", "description": "Feature engineering and factor registry"},
+    {"name": "risk", "description": "Risk state machine, alerts, VaR, and overlays"},
+    {"name": "strategy", "description": "Strategy rotation and constraints"},
+    {"name": "backtest", "description": "Historical backtesting engine"},
+    {"name": "audit", "description": "Trade audit and grading"},
+    {"name": "paper", "description": "Paper-trading engine"},
+    {"name": "analysis", "description": "Technical indicators, stress tests, Monte Carlo"},
+    {"name": "reports", "description": "PDF/HTML report generation"},
+    {"name": "configuration", "description": "Runtime configuration management with version control"},
+    {"name": "monitoring", "description": "Health, metrics, and observability"},
+]
+
+app = FastAPI(
+    title="Retail ETF Guardian API",
+    version="0.2.0",
+    description=(
+        "Risk-aware ETF rotation, audit, and do-not-trade backend.\n\n"
+        "Provides data sync, feature engineering, risk state machine, "
+        "backtesting, paper trading, and reporting for A-share ETFs."
+    ),
+    openapi_tags=_openapi_tags,
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -71,6 +112,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(PrometheusMiddleware)
 
 from app.core.response_cache import ResponseCacheMiddleware
 app.add_middleware(ResponseCacheMiddleware)
@@ -85,8 +129,30 @@ app.include_router(paper_router, prefix="/api/paper", tags=["paper"])
 app.include_router(websocket_router, tags=["websocket"])
 app.include_router(reports_router, prefix="/api/reports", tags=["reports"])
 app.include_router(analysis_router, prefix="/api/analysis", tags=["analysis"])
+app.include_router(ml_router, prefix="/api/ml", tags=["ml"])
+app.include_router(nlp_router, prefix="/api/nlp", tags=["nlp"])
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(social_router, prefix="/api/social", tags=["social"])
+app.include_router(config_router, prefix="/api/config", tags=["configuration"])
 
 
-@app.get("/api/health")
+@app.get("/api/health", tags=["monitoring"])
 def health() -> dict[str, str]:
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0"}
+
+
+@app.get("/metrics", tags=["monitoring"], include_in_schema=False)
+def metrics():
+    return get_metrics_response()
+
+
+rate_limiter = RateLimiter(
+    calls=settings.RATE_LIMIT_CALLS,
+    period=settings.RATE_LIMIT_PERIOD,
+)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request, call_next):
+    await rate_limiter(request)
+    return await call_next(request)

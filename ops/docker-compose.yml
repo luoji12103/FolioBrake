@@ -46,6 +46,17 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api-server
+    restart: unless-stopped
+
   celery-worker:
     build:
       context: ../backend
@@ -79,3 +90,4 @@ services:
 volumes:
   guardian_postgres:
   guardian_redis:
+  prometheus_data:

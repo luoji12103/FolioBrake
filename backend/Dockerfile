@@ -8,6 +8,9 @@ WORKDIR /build
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --prefix=/install .
 
+RUN mkdir -p /install/lib/python3.11/site-packages/efinance/data && \
+    chmod 777 /install/lib/python3.11/site-packages/efinance/data
+
 FROM python:3.11-slim
 
 RUN apt-get update && \
@@ -16,12 +19,14 @@ RUN apt-get update && \
 
 COPY --from=builder /install /usr/local
 
+RUN mkdir -p /usr/local/lib/python3.11/site-packages/efinance/data && \
+    chmod 777 /usr/local/lib/python3.11/site-packages/efinance/data
+
 WORKDIR /app
 COPY app ./app
 
-# Create data directory for efinance
-RUN mkdir -p /usr/local/lib/python3.11/site-packages/efinance/data && \
-    chmod 777 /usr/local/lib/python3.11/site-packages/efinance/data
+RUN mkdir -p /app/data/ml_models /app/data/nlp_cache && \
+    chmod -R 777 /app/data
 
 RUN useradd --create-home appuser
 USER appuser

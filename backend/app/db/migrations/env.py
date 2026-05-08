@@ -11,6 +11,10 @@ from app.backtest import models  # noqa: F401
 from app.audit import models  # noqa: F401
 from app.risk import models  # noqa: F401
 from app.paper import models  # noqa: F401
+from app.ml import models  # noqa: F401
+from app.nlp import models  # noqa: F401
+from app.auth import models  # noqa: F401
+from app.social import models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

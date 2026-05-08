@@ -19,6 +19,8 @@ dependencies = [
   "akshare>=1.0",
   "efinance>=0.5",
   "matplotlib>=3.8",
+  "prometheus-client>=0.20",
+  "structlog>=24.1",
 ]
 
 [project.optional-dependencies]
