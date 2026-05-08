@@ -192,6 +192,8 @@ def get_quality(symbol: str, db: Session = Depends(get_db)):
         diff = (dates[i] - dates[i-1]).days
         if diff > 3:  # More than a weekend gap
             missing += diff - 1
+    if missing > 0:
+        issues.append(f"{missing} missing trading days detected")
 
     # Check for zero volume
     zero_vol = sum(1 for b in bars if b.volume == 0)
