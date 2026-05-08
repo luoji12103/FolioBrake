@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import "./shared.css";
 
-/* ---- Types ---- */
-
 interface SettingsState {
   riskProfile: "conservative" | "balanced" | "aggressive";
   apiUrl: string;
@@ -24,9 +22,13 @@ const PROFILE_DESCRIPTIONS: Record<SettingsState["riskProfile"], string> = {
     "Maximizes return potential. Higher position sizes, tighter stops, and momentum-focused selection.",
 };
 
-const STORAGE_KEY = "folioBrake_settings";
+const PROFILE_ICONS: Record<SettingsState["riskProfile"], string> = {
+  conservative: "\uD83D\uDEE1",
+  balanced: "\u2696",
+  aggressive: "\uD83D\uDD25",
+};
 
-/* ---- Load persisted settings ---- */
+const STORAGE_KEY = "folioBrake_settings";
 
 function loadSettings(): SettingsState {
   try {
@@ -49,24 +51,27 @@ function saveSettings(settings: SettingsState) {
   }
 }
 
-/* ---- Skeleton ---- */
-
 function SettingsSkeleton() {
   return (
-    <div style={{ marginTop: 16 }}>
-      <div className="skeleton" style={{ height: 200, marginBottom: 20 }} />
+    <div style={{ marginTop: "var(--space-4)" }}>
+      <div className="skeleton-card">
+        <div className="skeleton" style={{ height: 12, width: "30%", marginBottom: "var(--space-3)" }} />
+        <div className="skeleton" style={{ height: 42, width: "100%", marginBottom: "var(--space-3)" }} />
+        <div className="skeleton" style={{ height: 14, width: "70%" }} />
+      </div>
+      <div className="skeleton-card">
+        <div className="skeleton" style={{ height: 12, width: "30%", marginBottom: "var(--space-3)" }} />
+        <div className="skeleton" style={{ height: 42, width: "100%" }} />
+      </div>
     </div>
   );
 }
-
-/* ---- Page ---- */
 
 function Settings() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
   const [saved, setSaved] = useState(false);
 
-  /* Load on mount */
   useEffect(() => {
     setSettings(loadSettings());
     setIsInitialized(true);
@@ -99,7 +104,6 @@ function Settings() {
     <div className="page">
       <h2>Settings</h2>
 
-      {/* Risk Profile */}
       <div className="card">
         <div className="card-title">Risk Profile</div>
         <div style={{ maxWidth: 500 }}>
@@ -121,20 +125,33 @@ function Settings() {
               <option value="aggressive">Aggressive</option>
             </select>
           </div>
-          <p
+          <div
             style={{
-              fontSize: 13,
-              color: "var(--color-text-muted)",
-              lineHeight: 1.6,
-              marginTop: 4,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "var(--space-3)",
+              padding: "var(--space-3)",
+              background: "var(--color-surface-raised)",
+              borderRadius: "var(--radius-md)",
+              marginTop: "var(--space-1)",
             }}
           >
-            {PROFILE_DESCRIPTIONS[settings.riskProfile]}
-          </p>
+            <span style={{ fontSize: 20, lineHeight: 1 }}>
+              {PROFILE_ICONS[settings.riskProfile]}
+            </span>
+            <p
+              style={{
+                fontSize: "var(--text-sm)",
+                color: "var(--color-text-muted)",
+                lineHeight: "var(--leading-relaxed)",
+              }}
+            >
+              {PROFILE_DESCRIPTIONS[settings.riskProfile]}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* API URL */}
       <div className="card">
         <div className="card-title">Backend Connection</div>
         <div style={{ maxWidth: 500 }}>
@@ -151,9 +168,9 @@ function Settings() {
           </div>
           <p
             style={{
-              fontSize: 12,
-              color: "var(--color-text-muted)",
-              marginTop: 4,
+              fontSize: "var(--text-xs)",
+              color: "var(--color-text-dim)",
+              marginTop: "var(--space-1)",
             }}
           >
             Changing the API URL requires a page refresh to take effect.
@@ -161,7 +178,6 @@ function Settings() {
         </div>
       </div>
 
-      {/* Data Source */}
       <div className="card">
         <div className="card-title">Market Data Source</div>
         <div style={{ maxWidth: 500 }}>
@@ -184,9 +200,9 @@ function Settings() {
           </div>
           <p
             style={{
-              fontSize: 12,
-              color: "var(--color-text-muted)",
-              marginTop: 4,
+              fontSize: "var(--text-xs)",
+              color: "var(--color-text-dim)",
+              marginTop: "var(--space-1)",
             }}
           >
             AKShare is the default open-source Chinese market data provider.
@@ -195,7 +211,6 @@ function Settings() {
         </div>
       </div>
 
-      {/* Theme Toggle */}
       <div className="card">
         <div className="card-title">Appearance</div>
         <div style={{ maxWidth: 500 }}>
@@ -221,27 +236,20 @@ function Settings() {
         </div>
       </div>
 
-      {/* Save */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
-          marginTop: 8,
+          gap: "var(--space-3)",
+          marginTop: "var(--space-2)",
         }}
       >
         <button className="btn btn-primary" onClick={handleSave}>
           Save Settings
         </button>
         {saved && (
-          <span
-            style={{
-              fontSize: 13,
-              color: "var(--color-green)",
-              fontWeight: 600,
-            }}
-          >
-            Saved successfully
+          <span className="toast toast-success">
+            {"\u2713"} Saved successfully
           </span>
         )}
       </div>

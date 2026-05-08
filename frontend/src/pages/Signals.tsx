@@ -7,23 +7,25 @@ import "./shared.css";
 
 function ScoreBar({ score, maxScore = 100 }: { score: number; maxScore?: number }) {
   const pct = Math.min(100, Math.max(0, (score / maxScore) * 100));
+  const color = pct > 70 ? "var(--color-green)" : pct > 40 ? "var(--color-yellow)" : "var(--color-red)";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
       <div
         style={{
-          flex: 1, height: 6, borderRadius: 3,
+          flex: 1, height: 6, borderRadius: "var(--radius-full)",
           background: "var(--color-border)", overflow: "hidden", maxWidth: 80,
         }}
       >
         <div
           style={{
-            width: `${pct}%`, height: "100%", borderRadius: 3,
-            background: pct > 70 ? "var(--color-green)" : pct > 40 ? "var(--color-yellow)" : "var(--color-red)",
-            transition: "width 0.3s ease",
+            width: `${pct}%`, height: "100%", borderRadius: "var(--radius-full)",
+            background: color,
+            transition: "width 0.4s var(--ease-out)",
+            boxShadow: `0 0 8px ${color}40`,
           }}
         />
       </div>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text)" }}>
+      <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text)", fontVariantNumeric: "tabular-nums", minWidth: 32 }}>
         {score.toFixed(1)}
       </span>
     </div>
@@ -32,7 +34,7 @@ function ScoreBar({ score, maxScore = 100 }: { score: number; maxScore?: number 
 
 function SignalSkeleton() {
   return (
-    <div style={{ marginTop: 16 }}>
+    <div style={{ marginTop: "var(--space-4)" }}>
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="skeleton-row">
           <div className="skeleton" /><div className="skeleton" /><div className="skeleton" />
@@ -58,21 +60,25 @@ function SignalExpandable({ signal }: { signal: Signal }) {
       <div className="expandable-header" onClick={() => setOpen(!open)} role="button" tabIndex={0}
         aria-expanded={open} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen(!open); }}>
         <span className={`expandable-arrow ${open ? "open" : ""}`}>&#9654;</span>
-        <span style={{ fontSize: 14, color: "var(--color-text)" }}>
-          {signal.symbol} — Score: {signal.score.toFixed(1)} | Rank: #{signal.rank}
+        <span style={{ fontSize: "var(--text-base)", color: "var(--color-text)" }}>
+          <span style={{ color: "var(--color-accent)", fontWeight: 600 }}>{signal.symbol}</span>
+          <span style={{ color: "var(--color-text-dim)", margin: "0 6px" }}>{"\u2014"}</span>
+          <span style={{ color: "var(--color-text-muted)" }}>Score: {signal.score.toFixed(1)}</span>
+          <span style={{ color: "var(--color-text-dim)", margin: "0 4px" }}>{"\u00B7"}</span>
+          <span style={{ color: "var(--color-text-muted)" }}>Rank: #{signal.rank}</span>
         </span>
       </div>
       {open && (
         <div className="expandable-body">
-          <p style={{ fontSize: 13, color: "var(--color-text-muted)" }}>
+          <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
             {formatReason(signal.reason)}
           </p>
           {signal.reason?.breakdown && (
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: "var(--space-2)" }}>
               {Object.entries(signal.reason.breakdown).map(([cat, info]: [string, any]) => (
-                <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "2px 0" }}>
+                <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", padding: "2px 0", color: "var(--color-text-dim)" }}>
                   <span>{cat}</span>
-                  <span>weight: {info?.weight?.toFixed(2) || "?"}, sub: {info?.sub_score?.toFixed(3) || "?"}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>weight: {info?.weight?.toFixed(2) || "?"}, sub: {info?.sub_score?.toFixed(3) || "?"}</span>
                 </div>
               ))}
             </div>
@@ -100,10 +106,10 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
         <tbody>
           {sorted.map((s) => (
             <tr key={s.symbol}>
-              <td style={{ fontWeight: 600 }}>{s.symbol}</td>
+              <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{s.symbol}</td>
               <td><ScoreBar score={s.score} /></td>
-              <td>#{s.rank}</td>
-              <td style={{ maxWidth: 300, whiteSpace: "normal", fontSize: 12, color: "var(--color-text-muted)" }}>
+              <td style={{ color: "var(--color-text-muted)", fontVariantNumeric: "tabular-nums" }}>#{s.rank}</td>
+              <td style={{ maxWidth: 300, whiteSpace: "normal", fontSize: "var(--text-xs)", color: "var(--color-text-dim)" }}>
                 {formatReason(s.reason)}
               </td>
             </tr>
@@ -117,7 +123,7 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
 function SignalDetails({ signals }: { signals: Signal[] }) {
   const sorted = useMemo(() => [...signals].sort((a, b) => a.rank - b.rank), [signals]);
   return (
-    <div style={{ marginTop: 20 }}>
+    <div style={{ marginTop: "var(--space-6)" }}>
       <h3 className="section-title">Signal Explanations</h3>
       <div className="card">
         {sorted.map((s) => <SignalExpandable key={s.symbol} signal={s} />)}
@@ -166,7 +172,11 @@ function Signals() {
 
       {!isLoading && !error && signals && signals.length === 0 && (
         <div className="state-banner state-empty">
-          No signals generated yet. Run a strategy evaluation to produce signals.
+          <div className="state-empty-icon">{"\uD83D\uDCC8"}</div>
+          <div className="state-empty-title">No signals generated yet</div>
+          <div className="state-empty-desc">
+            Run a strategy evaluation to produce weekly trading signals.
+          </div>
         </div>
       )}
 
@@ -179,7 +189,7 @@ function Signals() {
 
       {!portfolioLoading && !portfolioError && portfolio && portfolio.length > 0 && (
         <>
-          <div style={{ marginTop: 32 }}>
+          <div style={{ marginTop: "var(--space-8)" }}>
             <h3 className="section-title">Portfolio Weights</h3>
             <div className="card">
               <WeightBarChart
@@ -190,15 +200,17 @@ function Signals() {
               />
             </div>
           </div>
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: "var(--space-4)" }}>
             <h3 className="section-title">Paper Trading</h3>
-            <div className="card" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div className="card" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
               <button className="btn-primary" onClick={handleCreateAndApply} disabled={applying}>
                 {applying ? "Applying..." : (paperId ? `Apply to Portfolio #${paperId}` : "Create & Apply")}
               </button>
-              <span style={{ fontSize: 13, color: applyMsg?.startsWith("Error") ? "var(--color-red)" : "var(--color-green)" }}>
-                {applyMsg}
-              </span>
+              {applyMsg && (
+                <span className={`toast ${applyMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
+                  {applyMsg}
+                </span>
+              )}
             </div>
           </div>
         </>

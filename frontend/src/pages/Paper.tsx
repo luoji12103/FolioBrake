@@ -3,8 +3,6 @@ import { ErrorMessage } from "../components/ErrorMessage";
 import { usePaperHoldings, usePaperPnl, PaperHolding } from "../api/hooks";
 import "./shared.css";
 
-/* ---- Format helpers ---- */
-
 function fmtCurrency(v: number): string {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -18,14 +16,15 @@ function fmtPct(v: number): string {
   return `${(v * 100).toFixed(2)}%`;
 }
 
-/* ---- Skeleton ---- */
-
 function PaperSkeleton() {
   return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 20 }}>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="skeleton" style={{ height: 90 }} />
+    <div style={{ marginTop: "var(--space-4)" }}>
+      <div className="metrics-grid">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="skeleton-card">
+            <div className="skeleton" style={{ width: "40%", height: 12 }} />
+            <div className="skeleton" style={{ width: "65%", height: 28 }} />
+          </div>
         ))}
       </div>
       {Array.from({ length: 5 }).map((_, i) => (
@@ -41,8 +40,6 @@ function PaperSkeleton() {
   );
 }
 
-/* ---- Summary cards ---- */
-
 function PortfolioSummary({
   pnl,
 }: {
@@ -52,19 +49,19 @@ function PortfolioSummary({
     <div className="metrics-grid">
       <div className="metric-card">
         <div className="metric-label">Total Value</div>
-        <div className="metric-value" style={{ fontSize: 22, color: "var(--color-text)" }}>
+        <div className="metric-value" style={{ fontSize: "var(--text-xl)", color: "var(--color-text)" }}>
           {fmtCurrency(pnl.total_value)}
         </div>
       </div>
       <div className="metric-card">
         <div className="metric-label">Cash</div>
-        <div className="metric-value" style={{ fontSize: 22, color: "var(--color-text)" }}>
+        <div className="metric-value" style={{ fontSize: "var(--text-xl)", color: "var(--color-text)" }}>
           {fmtCurrency(pnl.cash)}
         </div>
       </div>
       <div className="metric-card">
         <div className="metric-label">Invested</div>
-        <div className="metric-value" style={{ fontSize: 22, color: "var(--color-text)" }}>
+        <div className="metric-value" style={{ fontSize: "var(--text-xl)", color: "var(--color-text)" }}>
           {fmtCurrency(pnl.invested)}
         </div>
       </div>
@@ -72,10 +69,10 @@ function PortfolioSummary({
         <div className="metric-label">Total P&amp;L</div>
         <div
           className={`metric-value ${pnl.total_pnl >= 0 ? "positive" : "negative"}`}
-          style={{ fontSize: 22 }}
+          style={{ fontSize: "var(--text-xl)" }}
         >
           {fmtCurrency(pnl.total_pnl)}
-          <span style={{ fontSize: 14, marginLeft: 6 }}>
+          <span style={{ fontSize: "var(--text-sm)", marginLeft: "var(--space-1)", fontWeight: 500 }}>
             ({fmtPct(pnl.total_pnl_pct)})
           </span>
         </div>
@@ -84,16 +81,18 @@ function PortfolioSummary({
   );
 }
 
-/* ---- Holdings table ---- */
-
 function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
   if (!holdings || holdings.length === 0) {
     return (
       <div className="card">
         <div className="card-title">Holdings</div>
-        <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-          No holdings in this portfolio.
-        </p>
+        <div className="state-banner state-empty" style={{ marginBottom: 0 }}>
+          <div className="state-empty-icon">{"\uD83D\uDCE6"}</div>
+          <div className="state-empty-title">No holdings yet</div>
+          <div className="state-empty-desc">
+            Apply trading signals to populate your paper portfolio.
+          </div>
+        </div>
       </div>
     );
   }
@@ -120,18 +119,16 @@ function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
           <tbody>
             {sorted.map((h) => (
               <tr key={h.instrument_id}>
-                <td style={{ fontWeight: 600 }}>{h.instrument_id}</td>
-                <td>{h.quantity.toLocaleString()}</td>
-                <td>{fmtCurrency(h.avg_cost)}</td>
-                <td>{fmtCurrency(h.current_price)}</td>
-                <td>{fmtCurrency(h.market_value)}</td>
+                <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{h.instrument_id}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums" }}>{h.quantity.toLocaleString()}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCurrency(h.avg_cost)}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCurrency(h.current_price)}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtCurrency(h.market_value)}</td>
                 <td
                   style={{
-                    color:
-                      h.pnl >= 0
-                        ? "var(--color-green)"
-                        : "var(--color-red)",
+                    color: h.pnl >= 0 ? "var(--color-green)" : "var(--color-red)",
                     fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
                   {fmtCurrency(h.pnl)}
@@ -145,8 +142,6 @@ function HoldingsTable({ holdings }: { holdings: PaperHolding[] }) {
   );
 }
 
-/* ---- Order history (placeholder with static data structure) ---- */
-
 interface Order {
   id: string;
   date: string;
@@ -159,16 +154,19 @@ interface Order {
 }
 
 function OrderHistory() {
-  /* Orders would come from an API in production — show empty state */
   const [orders] = useState<Order[]>([]);
 
   return (
     <div className="card">
       <div className="card-title">Order History</div>
       {orders.length === 0 ? (
-        <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-          No orders have been placed yet.
-        </p>
+        <div className="state-banner state-empty" style={{ marginBottom: 0 }}>
+          <div className="state-empty-icon">{"\uD83D\uDCCB"}</div>
+          <div className="state-empty-title">No orders placed</div>
+          <div className="state-empty-desc">
+            Order history will appear here once you start executing trades.
+          </div>
+        </div>
       ) : (
         <div className="table-wrap">
           <table>
@@ -195,9 +193,7 @@ function OrderHistory() {
                     <td>{new Date(o.date).toLocaleDateString("en-CN")}</td>
                     <td style={{ fontWeight: 600 }}>{o.symbol}</td>
                     <td>
-                      <span
-                        className={`badge ${o.action === "BUY" ? "badge-buy" : "badge-sell"}`}
-                      >
+                      <span className={`badge ${o.action === "BUY" ? "badge-buy" : "badge-sell"}`}>
                         {o.action}
                       </span>
                     </td>
@@ -220,17 +216,15 @@ function OrderHistory() {
   );
 }
 
-/* ---- Apply Signal button (disabled) ---- */
-
 function ApplySignalButton() {
   return (
     <div className="card">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-4)" }}>
         <div>
-          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+          <h3 style={{ fontSize: "var(--text-base)", fontWeight: 600, marginBottom: "var(--space-1)" }}>
             Apply Latest Signals
           </h3>
-          <p style={{ fontSize: 13, color: "var(--color-text-muted)" }}>
+          <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)" }}>
             Execute trades based on the most recent weekly signals.
           </p>
         </div>
@@ -241,8 +235,6 @@ function ApplySignalButton() {
     </div>
   );
 }
-
-/* ---- Page ---- */
 
 const DEFAULT_PORTFOLIO_ID = "default";
 
@@ -279,7 +271,11 @@ function Paper() {
 
       {!isLoading && !error && !pnl && !holdings && (
         <div className="state-banner state-empty">
-          No portfolio data available. Initialize a paper portfolio to see data here.
+          <div className="state-empty-icon">{"\uD83D\uDCBC"}</div>
+          <div className="state-empty-title">No portfolio data</div>
+          <div className="state-empty-desc">
+            Initialize a paper portfolio from the Signals page to start tracking performance.
+          </div>
         </div>
       )}
 

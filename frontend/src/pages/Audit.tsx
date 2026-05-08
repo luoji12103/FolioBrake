@@ -18,39 +18,81 @@ function Audit() {
     finally { setLoading(false); }
   };
 
-  const gradeColor = { GREEN: "#34d399", YELLOW: "#fbbf24", RED: "#f87171" } as const;
+  const gradeColor: Record<string, string> = {
+    GREEN: "var(--color-green)",
+    YELLOW: "var(--color-yellow)",
+    RED: "var(--color-red)",
+  };
+
+  const gradeGlow: Record<string, string> = {
+    GREEN: "var(--shadow-glow-green)",
+    YELLOW: "none",
+    RED: "var(--shadow-glow-red)",
+  };
 
   return (
     <div className="page">
       <h2>Audit Gatekeeper</h2>
-      <button className="btn-primary" onClick={handleRun} disabled={loading} style={{marginBottom:16}}>
+      <button className="btn-primary" onClick={handleRun} disabled={loading} style={{ marginBottom: "var(--space-4)" }}>
         {loading ? "Running..." : "Run Audit"}
       </button>
 
       {error && <ErrorMessage message={error} onRetry={handleRun} />}
-      {!result && !loading && !error && <div className="state-banner state-empty">Run an audit to validate strategy robustness.</div>}
+
+      {!result && !loading && !error && (
+        <div className="state-banner state-empty">
+          <div className="state-empty-icon">{"\uD83D\uDD0D"}</div>
+          <div className="state-empty-title">Validate your strategy</div>
+          <div className="state-empty-desc">
+            Run an audit to check strategy robustness, overfitting risk, and statistical significance.
+          </div>
+        </div>
+      )}
 
       {result && (
-        <div className="card" style={{textAlign:"center", marginBottom:16}}>
-          <h3 style={{fontSize:32, color: gradeColor[result.grade as keyof typeof gradeColor] || "#8b8fa3"}}>
-            {result.grade}
-          </h3>
-          <p style={{color:"var(--color-text-muted)"}}>Score: {result.score} — {result.summary}</p>
+        <div className="card" style={{ textAlign: "center", marginBottom: "var(--space-4)" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 80,
+              height: 80,
+              borderRadius: "var(--radius-full)",
+              background: `${gradeColor[result.grade] || "var(--color-text-dim)"}15`,
+              border: `3px solid ${gradeColor[result.grade] || "var(--color-text-dim)"}`,
+              margin: "0 auto var(--space-3)",
+              boxShadow: gradeGlow[result.grade] || "none",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "var(--text-2xl)",
+                fontWeight: 800,
+                color: gradeColor[result.grade] || "var(--color-text-dim)",
+              }}
+            >
+              {result.grade}
+            </span>
+          </div>
+          <p style={{ color: "var(--color-text-muted)", fontSize: "var(--text-sm)", lineHeight: "var(--leading-relaxed)" }}>
+            Score: <strong style={{ color: "var(--color-text)" }}>{result.score}</strong> {"\u2014"} {result.summary}
+          </p>
         </div>
       )}
 
       {result?.checks && (
         <div className="card">
-          <h3>Check Details</h3>
+          <div className="card-title">Check Details</div>
           <div className="table-wrap">
             <table>
               <thead><tr><th>Check</th><th>Status</th><th>Score</th></tr></thead>
               <tbody>
                 {result.checks.map((c: any) => (
                   <tr key={c.id || c.name}>
-                    <td>{c.name}</td>
+                    <td style={{ fontWeight: 500 }}>{c.name}</td>
                     <td><span className={`badge ${c.result === "PASS" ? "badge-ok" : c.result === "WARN" ? "badge-warning" : "badge-error"}`}>{c.result}</span></td>
-                    <td>{c.detail}</td>
+                    <td style={{ color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>{c.detail}</td>
                   </tr>
                 ))}
               </tbody>

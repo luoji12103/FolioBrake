@@ -6,7 +6,7 @@ import "./shared.css";
 
 const METRIC_TOOLTIPS: Record<string, string> = {
   total_return: "Overall portfolio return over the entire backtest period",
-  cagr: "Compound Annual Growth Rate — annualized return",
+  cagr: "Compound Annual Growth Rate \u2014 annualized return",
   sharpe_ratio: "Risk-adjusted return. Higher = better return per unit of risk",
   max_drawdown: "Largest peak-to-trough decline. Lower absolute value is better",
   volatility: "Annualized standard deviation of daily returns. Lower = more stable",
@@ -18,6 +18,22 @@ function formatMetricValue(key: string, v: number): string {
   if (pctKeys.includes(key)) return (v * 100).toFixed(2) + "%";
   if (key === "sharpe_ratio") return v.toFixed(2);
   return v.toFixed(4);
+}
+
+function BacktestSkeleton() {
+  return (
+    <div style={{ marginTop: "var(--space-4)" }}>
+      <div className="metric-grid">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="skeleton-card">
+            <div className="skeleton" style={{ width: "50%", height: 12 }} />
+            <div className="skeleton" style={{ width: "70%", height: 28 }} />
+          </div>
+        ))}
+      </div>
+      <div className="skeleton" style={{ height: 300, borderRadius: "var(--radius-lg)", marginTop: "var(--space-4)" }} />
+    </div>
+  );
 }
 
 function Backtest() {
@@ -60,7 +76,7 @@ function Backtest() {
   return (
     <div className="page">
       <h2>Backtest</h2>
-      <div className="card" style={{marginBottom: 16}}>
+      <div className="card" style={{ marginBottom: "var(--space-4)" }}>
         <div className="grid-col-3">
           <div className="form-group">
             <label>Start Date</label>
@@ -75,20 +91,28 @@ function Backtest() {
             <input className="form-input" type="number" value={form.initial_capital} onChange={e => setForm({...form, initial_capital: e.target.value})} />
           </div>
         </div>
-        <button className="btn-primary" onClick={handleRun} disabled={loading || !isValid} style={{marginTop:12}}>
+        <button className="btn-primary" onClick={handleRun} disabled={loading || !isValid} style={{ marginTop: "var(--space-3)" }}>
           {loading ? "Running..." : "Run Backtest"}
         </button>
       </div>
 
       {error && <ErrorMessage message={error} onRetry={handleRun} />}
 
+      {loading && <BacktestSkeleton />}
+
       {!runId && !loading && !error && (
-        <div className="state-banner state-empty">Configure and run a backtest to see results.</div>
+        <div className="state-banner state-empty">
+          <div className="state-empty-icon">{"\uD83D\uDCC9"}</div>
+          <div className="state-empty-title">Configure and run a backtest</div>
+          <div className="state-empty-desc">
+            Set your date range and initial capital above, then run the backtest to see performance results.
+          </div>
+        </div>
       )}
 
       {results && (
         <div className="card">
-          <h3>Results (Run #{runId})</h3>
+          <div className="card-title">Results (Run #{runId})</div>
           <div className="metric-grid">
             {Object.entries(results.metrics || {}).map(([k, v]) => (
               <div key={k} className="metric-card">
@@ -104,15 +128,15 @@ function Backtest() {
           </div>
           {results.equity_curve && results.equity_curve.length > 0 && (
             <>
-              <div className="card" style={{ marginTop: 16 }}>
-                <h3>Equity Curve</h3>
+              <div className="card" style={{ marginTop: "var(--space-4)" }}>
+                <div className="card-title">Equity Curve</div>
                 <EquityChart data={results.equity_curve} />
               </div>
-              <div className="card" style={{ marginTop: 16 }}>
-                <h3>Drawdown</h3>
+              <div className="card" style={{ marginTop: "var(--space-4)" }}>
+                <div className="card-title">Drawdown</div>
                 <DrawdownChart data={computeDrawdown(results.equity_curve)} />
               </div>
-              <p style={{ color: 'var(--color-text-muted)', marginTop: 8 }}>
+              <p style={{ color: "var(--color-text-dim)", marginTop: "var(--space-2)", fontSize: "var(--text-xs)" }}>
                 {results.equity_curve.length} weekly snapshots, {results.trades?.length || 0} trades
               </p>
             </>

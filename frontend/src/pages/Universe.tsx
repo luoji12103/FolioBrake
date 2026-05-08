@@ -45,7 +45,7 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
 
   return (
     <>
-      <div className="grid-col-2" style={{ marginBottom: 16, maxWidth: 500 }}>
+      <div className="grid-col-2" style={{ marginBottom: "var(--space-4)", maxWidth: 500 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label htmlFor="uni-search">Search</label>
           <input
@@ -72,12 +72,18 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
         </div>
       </div>
 
-      <p style={{ fontSize: 13, color: "var(--color-text-muted)", marginBottom: 12 }}>
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)", marginBottom: "var(--space-3)" }}>
         {filtered.length} of {instruments.length} instruments
       </p>
 
       {filtered.length === 0 ? (
-        <div className="state-banner state-empty">No instruments match your filters.</div>
+        <div className="state-banner state-empty">
+          <div className="state-empty-icon">{"\uD83D\uDD0D"}</div>
+          <div className="state-empty-title">No matches found</div>
+          <div className="state-empty-desc">
+            Try adjusting your search or category filter.
+          </div>
+        </div>
       ) : (
         <div className="table-wrap">
           <table>
@@ -94,12 +100,12 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
             <tbody>
               {filtered.map((inst) => (
                 <tr key={inst.symbol}>
-                  <td style={{ fontWeight: 600 }}>{inst.symbol}</td>
+                  <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{inst.symbol}</td>
                   <td>{inst.name}</td>
-                  <td>{inst.exchange}</td>
+                  <td style={{ color: "var(--color-text-muted)" }}>{inst.exchange}</td>
                   <td><span className="badge badge-ok">{inst.type}</span></td>
-                  <td>{inst.category || "N/A"}</td>
-                  <td>{formatDate(inst.created_at)}</td>
+                  <td style={{ color: "var(--color-text-muted)" }}>{inst.category || "N/A"}</td>
+                  <td style={{ color: "var(--color-text-dim)", fontSize: "var(--text-xs)" }}>{formatDate(inst.created_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -112,7 +118,7 @@ function UniverseTable({ instruments }: { instruments: Instrument[] }) {
 
 function UniverseSkeleton() {
   return (
-    <div style={{ marginTop: 16 }}>
+    <div style={{ marginTop: "var(--space-4)" }}>
       {Array.from({ length: 8 }).map((_, i) => (<SkeletonRow key={i} />))}
     </div>
   );
@@ -141,10 +147,10 @@ function Universe() {
     <div className="page">
       <h2>ETF Universe</h2>
 
-      <div className="card" style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="card" style={{ marginBottom: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
         <input
           className="form-input"
-          style={{ maxWidth: 200 }}
+          style={{ maxWidth: 220 }}
           placeholder="ETF symbol (e.g. 510880)"
           value={newSymbol}
           onChange={(e) => setNewSymbol(e.target.value)}
@@ -154,7 +160,7 @@ function Universe() {
           {adding ? "Adding..." : "Add ETF"}
         </button>
         {addMsg && (
-          <span style={{ fontSize: 13, color: addMsg.startsWith("Error") ? "var(--color-red)" : "var(--color-green)" }}>
+          <span className={`toast ${addMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
             {addMsg}
           </span>
         )}
@@ -165,7 +171,13 @@ function Universe() {
       {error && <ErrorMessage message={`Failed to load instruments: ${error}`} onRetry={refetch} />}
 
       {!isLoading && !error && instruments && instruments.length === 0 && (
-        <div className="state-banner state-empty">No instruments found in the universe.</div>
+        <div className="state-banner state-empty">
+          <div className="state-empty-icon">{"\uD83C\uDF10"}</div>
+          <div className="state-empty-title">No instruments in universe</div>
+          <div className="state-empty-desc">
+            Add ETF symbols above to start tracking them.
+          </div>
+        </div>
       )}
 
       {!isLoading && !error && instruments && instruments.length > 0 && (

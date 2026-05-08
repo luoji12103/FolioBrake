@@ -39,12 +39,14 @@ function Layout() {
   return (
     <div className="layout">
       <header className="header">
-        <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
-          <span className={menuOpen ? "hamburger-line open" : "hamburger-line"} />
-          <span className={menuOpen ? "hamburger-line open" : "hamburger-line"} />
-          <span className={menuOpen ? "hamburger-line open" : "hamburger-line"} />
-        </button>
-        <h1 className="logo">Retail ETF Guardian</h1>
+        <div className="header-left">
+          <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
+            <span className={menuOpen ? "hamburger-line open" : "hamburger-line"} />
+            <span className={menuOpen ? "hamburger-line open" : "hamburger-line"} />
+            <span className={menuOpen ? "hamburger-line open" : "hamburger-line"} />
+          </button>
+          <h1 className="logo">FolioBrake</h1>
+        </div>
         <RiskBadge state={riskState?.state || "NORMAL"} />
       </header>
       <nav className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>

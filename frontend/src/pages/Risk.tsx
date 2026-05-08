@@ -3,8 +3,6 @@ import { ErrorMessage } from "../components/ErrorMessage";
 import RiskBadge from "../components/RiskBadge";
 import "./shared.css";
 
-/* ---- Severity badge ---- */
-
 function SeverityBadge({ severity }: { severity: "INFO" | "WARNING" | "CRITICAL" }) {
   const map: Record<string, string> = {
     INFO: "badge-severity-info",
@@ -16,13 +14,11 @@ function SeverityBadge({ severity }: { severity: "INFO" | "WARNING" | "CRITICAL"
   );
 }
 
-/* ---- State machine ---- */
-
 const STATE_FLOW: { level: RiskLevel; label: string; color: string }[] = [
-  { level: "NORMAL", label: "Normal", color: "#34d399" },
-  { level: "CAUTION", label: "Caution", color: "#fbbf24" },
-  { level: "DEFENSIVE", label: "Defensive", color: "#f97316" },
-  { level: "HALT", label: "Halt", color: "#f87171" },
+  { level: "NORMAL", label: "Normal", color: "var(--color-green)" },
+  { level: "CAUTION", label: "Caution", color: "var(--color-yellow)" },
+  { level: "DEFENSIVE", label: "Defensive", color: "var(--color-orange)" },
+  { level: "HALT", label: "Halt", color: "var(--color-red)" },
 ];
 
 function StateMachine({ active }: { active: RiskLevel }) {
@@ -39,14 +35,17 @@ function StateMachine({ active }: { active: RiskLevel }) {
               <div
                 className={`risk-state-circle ${isActive ? "active" : ""}`}
                 style={{
-                  background: isPast ? s.color : "var(--color-surface)",
+                  background: isPast ? s.color : "var(--color-surface-raised)",
                   borderColor: isActive ? s.color : "var(--color-border)",
-                  color: isPast ? "#0f1117" : "var(--color-text-muted)",
+                  color: isPast ? "#0a0c14" : "var(--color-text-dim)",
+                  boxShadow: isActive ? `0 0 20px ${s.color}30` : "none",
                 }}
               >
-                {isActive ? ">" : ""}
+                {isActive ? "\u2713" : ""}
               </div>
-              <span className="risk-state-label">{s.label}</span>
+              <span className="risk-state-label" style={{ color: isActive ? s.color : undefined }}>
+                {s.label}
+              </span>
             </div>
             {showArrow && <div className="risk-state-arrow" />}
           </div>
@@ -56,14 +55,15 @@ function StateMachine({ active }: { active: RiskLevel }) {
   );
 }
 
-/* ---- Skeleton ---- */
-
 function RiskSkeleton() {
   return (
-    <div style={{ marginTop: 16 }}>
-      <div className="skeleton" style={{ height: 48, width: 200, marginBottom: 20 }} />
-      <div className="skeleton" style={{ height: 100, marginBottom: 20 }} />
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div style={{ marginTop: "var(--space-4)" }}>
+      <div className="skeleton-card">
+        <div className="skeleton" style={{ height: 12, width: "30%" }} />
+        <div className="skeleton" style={{ height: 40, width: "50%" }} />
+      </div>
+      <div className="skeleton" style={{ height: 100, marginBottom: "var(--space-5)", borderRadius: "var(--radius-lg)" }} />
+      {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="skeleton-row">
           <div className="skeleton" />
           <div className="skeleton" />
@@ -74,8 +74,6 @@ function RiskSkeleton() {
     </div>
   );
 }
-
-/* ---- Page ---- */
 
 function Risk() {
   const { data: riskState, error: stateErr, isLoading: stateLoading, refetch: refetchRisk } = useRiskState();
@@ -96,21 +94,25 @@ function Risk() {
 
       {!isLoading && !error && !riskState && (
         <div className="state-banner state-empty">
-          No risk data available.
+          <div className="state-empty-icon">{"\uD83D\uDEE1"}</div>
+          <div className="state-empty-title">No risk data available</div>
+          <div className="state-empty-desc">
+            Risk overlay data will appear here once the risk engine is running.
+          </div>
         </div>
       )}
 
       {!isLoading && !error && riskState && (
         <>
-          {/* ---- Large state indicator ---- */}
-          <div className="card" style={{ textAlign: "center", padding: 32 }}>
+          <div className="card" style={{ textAlign: "center", padding: "var(--space-8)" }}>
             <p
               style={{
-                fontSize: 14,
-                color: "var(--color-text-muted)",
-                marginBottom: 12,
+                fontSize: "var(--text-xs)",
+                color: "var(--color-text-dim)",
+                marginBottom: "var(--space-3)",
                 textTransform: "uppercase",
-                letterSpacing: "0.05em",
+                letterSpacing: "var(--tracking-wider)",
+                fontWeight: 600,
               }}
             >
               Current Risk State
@@ -118,9 +120,9 @@ function Risk() {
             <div style={{ display: "flex", justifyContent: "center" }}>
               <span
                 style={{
-                  fontSize: 18,
+                  fontSize: "var(--text-lg)",
                   padding: "10px 28px",
-                  borderRadius: 99,
+                  borderRadius: "var(--radius-full)",
                   fontWeight: 700,
                   display: "inline-block",
                 }}
@@ -130,25 +132,24 @@ function Risk() {
             </div>
             <p
               style={{
-                marginTop: 16,
-                fontSize: 15,
-                color: "var(--color-text)",
+                marginTop: "var(--space-4)",
+                fontSize: "var(--text-base)",
+                color: "var(--color-text-muted)",
                 maxWidth: 600,
                 marginLeft: "auto",
                 marginRight: "auto",
+                lineHeight: "var(--leading-relaxed)",
               }}
             >
               {riskState.transition_reason}
             </p>
           </div>
 
-          {/* ---- State machine ---- */}
           <div className="card">
             <div className="card-title">State Machine</div>
             <StateMachine active={riskState.state} />
           </div>
 
-          {/* ---- Triggered rules ---- */}
           <div className="card">
             <div className="card-title">Triggered Rules</div>
             {rules && rules.length > 0 ? (
@@ -166,12 +167,14 @@ function Risk() {
                   <tbody>
                     {rules.map((r) => (
                       <tr key={r.rule_name}>
-                        <td>{new Date(r.date).toLocaleDateString("en-CN")}</td>
+                        <td style={{ color: "var(--color-text-dim)", fontSize: "var(--text-xs)" }}>
+                          {new Date(r.date).toLocaleDateString("en-CN")}
+                        </td>
                         <td style={{ fontWeight: 600 }}>{r.rule_name}</td>
                         <td>
                           <SeverityBadge severity={r.severity} />
                         </td>
-                        <td style={{ whiteSpace: "normal", maxWidth: 240, fontSize: 13 }}>
+                        <td style={{ whiteSpace: "normal", maxWidth: 240, fontSize: "var(--text-xs)", color: "var(--color-text-dim)" }}>
                           {JSON.stringify(r.detail)}
                         </td>
                         <td>
@@ -187,39 +190,41 @@ function Risk() {
                 </table>
               </div>
             ) : (
-              <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-                No rules triggered today.
-              </p>
+              <div className="state-banner state-empty" style={{ marginBottom: 0 }}>
+                <div className="state-empty-icon">{"\u2705"}</div>
+                <div className="state-empty-title">All clear</div>
+                <div className="state-empty-desc">No rules triggered today.</div>
+              </div>
             )}
           </div>
 
-          {/* ---- Overlay decision ---- */}
           <div className="card">
             <div className="card-title">Overlay Decision</div>
             {overlay ? (
               <>
                 <p
                   style={{
-                    fontSize: 15,
+                    fontSize: "var(--text-base)",
                     fontWeight: 600,
                     color: "var(--color-text)",
-                    marginBottom: 8,
+                    marginBottom: "var(--space-2)",
                   }}
                 >
                   {overlay.decision}
                 </p>
                 <p
                   style={{
-                    fontSize: 14,
+                    fontSize: "var(--text-sm)",
                     color: "var(--color-text-muted)",
                     whiteSpace: "pre-wrap",
+                    lineHeight: "var(--leading-relaxed)",
                   }}
                 >
                   {overlay.reason}
                 </p>
               </>
             ) : (
-              <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
+              <p style={{ color: "var(--color-text-dim)", fontSize: "var(--text-sm)" }}>
                 No overlay decision available.
               </p>
             )}
