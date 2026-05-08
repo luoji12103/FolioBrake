@@ -18,9 +18,11 @@ services:
       retries: 5
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
     ports:
       - "6380:6379"
+    volumes:
+      - guardian_redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -42,6 +44,38 @@ services:
       redis:
         condition: service_healthy
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ../backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://guardian:guardian@postgres:5432/guardian
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ../backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://guardian:guardian@postgres:5432/guardian
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=info"]
+    restart: unless-stopped
 
 volumes:
   guardian_postgres:
+  guardian_redis:

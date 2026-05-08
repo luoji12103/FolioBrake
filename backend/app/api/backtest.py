@@ -56,6 +56,31 @@ def run_backtest(req: BacktestConfigRequest, db: Session = Depends(get_db)):
     return {"run_id": run.id, "status": run.status, "config_hash": run.config_hash}
 
 
+@router.post("/run-async")
+def run_backtest_async(req: BacktestConfigRequest):
+    from app.workers.tasks import run_backtest as run_backtest_task
+    task = run_backtest_task.delay(  # type: ignore[attr-defined]
+        strategy_config_id=req.strategy_config_id,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_capital=req.initial_capital,
+        benchmark_symbol=req.benchmark_symbol,
+    )
+    return {"task_id": task.id, "status": "queued"}
+
+
+@router.get("/task-status/{task_id}")
+def get_task_status(task_id: str):
+    from app.workers.celery_app import celery_app
+    result = celery_app.AsyncResult(task_id)
+    response = {"task_id": task_id, "status": result.status}
+    if result.status == "PROGRESS":
+        response["progress"] = result.info
+    elif result.ready():
+        response["result"] = result.get()
+    return response
+
+
 @router.get("/status/{run_id}")
 def get_status(run_id: int, db: Session = Depends(get_db)):
     run = db.execute(select(BacktestRun).where(BacktestRun.id == run_id)).scalar_one_or_none()

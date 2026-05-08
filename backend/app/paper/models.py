@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -16,6 +16,9 @@ class PaperPortfolio(Base):
 
 class PaperPosition(Base):
     __tablename__ = "paper_positions"
+    __table_args__ = (
+        Index("ix_paper_positions_portfolio", "portfolio_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     portfolio_id: Mapped[int] = mapped_column(ForeignKey("paper_portfolios.id"), nullable=False)
@@ -27,6 +30,9 @@ class PaperPosition(Base):
 
 class PaperOrder(Base):
     __tablename__ = "paper_orders"
+    __table_args__ = (
+        Index("ix_paper_orders_portfolio", "portfolio_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     portfolio_id: Mapped[int] = mapped_column(ForeignKey("paper_portfolios.id"), nullable=False)
@@ -41,6 +47,9 @@ class PaperOrder(Base):
 
 class PaperLedger(Base):
     __tablename__ = "paper_ledger"
+    __table_args__ = (
+        Index("ix_paper_ledger_portfolio", "portfolio_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     portfolio_id: Mapped[int] = mapped_column(ForeignKey("paper_portfolios.id"), nullable=False)

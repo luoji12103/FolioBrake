@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -14,6 +15,25 @@ from app.analysis.indicators import (
     compute_drawdown_series,
     compute_correlation_matrix,
     compute_return_attribution,
+)
+from app.analysis.risk_metrics import (
+    compute_var,
+    compute_cvar,
+    compute_var_historical,
+    compute_var_parametric,
+    compute_var_cornish_fisher,
+    compute_risk_metrics_summary,
+)
+from app.analysis.stress_test import (
+    run_stress_test,
+    get_default_scenarios,
+)
+from app.analysis.monte_carlo import (
+    run_monte_carlo,
+    run_monte_carlo_var,
+)
+from app.analysis.microstructure import (
+    compute_realized_volatility,
 )
 
 router = APIRouter(tags=["analysis"])
@@ -174,3 +194,119 @@ def get_return_attribution(
     result["dates"] = dates[1:]
 
     return result
+
+
+import numpy as np
+
+
+@router.get("/var/{symbol}")
+def get_var(
+    symbol: str,
+    confidence: float = Query(0.95, description="Confidence level (e.g. 0.95)"),
+    db: Session = Depends(get_db),
+):
+    inst, prices, dates = _fetch_prices(db, symbol)
+    if not inst:
+        return {"error": "Instrument not found"}
+    if len(prices) < 30:
+        return {"error": "Insufficient price data (need >= 30 observations)"}
+
+    returns = (np.diff(prices) / prices[:-1]).tolist()
+
+    return {
+        "symbol": symbol,
+        "confidence": confidence,
+        "var": compute_var(returns, confidence),
+        "cvar": compute_cvar(returns, confidence),
+        "var_historical": compute_var_historical(returns, confidence),
+        "var_parametric": compute_var_parametric(returns, confidence),
+        "var_cornish_fisher": compute_var_cornish_fisher(returns, confidence),
+    }
+
+
+@router.get("/risk-summary/{symbol}")
+def get_risk_summary(
+    symbol: str,
+    confidence: float = Query(0.95),
+    db: Session = Depends(get_db),
+):
+    inst, prices, dates = _fetch_prices(db, symbol)
+    if not inst:
+        return {"error": "Instrument not found"}
+    if len(prices) < 30:
+        return {"error": "Insufficient price data (need >= 30 observations)"}
+
+    returns = (np.diff(prices) / prices[:-1]).tolist()
+    return compute_risk_metrics_summary(returns, confidence)
+
+
+class StressTestRequest(BaseModel):
+    portfolio_value: float
+    positions: list[dict]
+    scenarios: list[dict] | None = None
+
+
+@router.post("/stress-test")
+def run_stress_test_endpoint(req: StressTestRequest):
+    scenarios = req.scenarios if req.scenarios else get_default_scenarios()
+    results = run_stress_test(req.portfolio_value, req.positions, scenarios)
+    return {"results": results, "num_scenarios": len(results)}
+
+
+@router.get("/stress-test/defaults")
+def get_default_stress_scenarios():
+    return {"scenarios": get_default_scenarios()}
+
+
+@router.get("/monte-carlo/{symbol}")
+def get_monte_carlo(
+    symbol: str,
+    num_simulations: int = Query(1000, ge=100, le=50000),
+    num_days: int = Query(252, ge=1, le=1260),
+    db: Session = Depends(get_db),
+):
+    inst, prices, dates = _fetch_prices(db, symbol)
+    if not inst:
+        return {"error": "Instrument not found"}
+    if len(prices) < 30:
+        return {"error": "Insufficient price data (need >= 30 observations)"}
+
+    returns = (np.diff(prices) / prices[:-1]).tolist()
+    result = run_monte_carlo(returns, num_simulations, num_days)
+    return {"symbol": symbol, **result}
+
+
+@router.get("/monte-carlo-var/{symbol}")
+def get_monte_carlo_var(
+    symbol: str,
+    portfolio_value: float = Query(..., description="Current portfolio value"),
+    num_simulations: int = Query(10000, ge=100, le=100000),
+    horizon_days: int = Query(10, ge=1, le=252),
+    confidence: float = Query(0.95),
+    db: Session = Depends(get_db),
+):
+    inst, prices, dates = _fetch_prices(db, symbol)
+    if not inst:
+        return {"error": "Instrument not found"}
+    if len(prices) < 30:
+        return {"error": "Insufficient price data (need >= 30 observations)"}
+
+    returns = (np.diff(prices) / prices[:-1]).tolist()
+    result = run_monte_carlo_var(returns, portfolio_value, num_simulations, horizon_days, confidence)
+    return {"symbol": symbol, **result}
+
+
+@router.get("/realized-volatility/{symbol}")
+def get_realized_volatility(
+    symbol: str,
+    window: int = Query(20, ge=2, le=252),
+    db: Session = Depends(get_db),
+):
+    inst, prices, dates = _fetch_prices(db, symbol)
+    if not inst:
+        return {"error": "Instrument not found"}
+    if len(prices) < window + 2:
+        return {"error": "Insufficient price data"}
+
+    result = compute_realized_volatility(prices, window)
+    return {"symbol": symbol, "dates": dates[window + 1:], **result}

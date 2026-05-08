@@ -72,6 +72,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.core.response_cache import ResponseCacheMiddleware
+app.add_middleware(ResponseCacheMiddleware)
+
 app.include_router(data_router, prefix="/api/data", tags=["data"])
 app.include_router(features_router, prefix="/api/features", tags=["features"])
 app.include_router(risk_router, prefix="/api/risk", tags=["risk"])

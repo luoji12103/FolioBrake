@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, func, Index
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +31,9 @@ class StrategyRun(Base):
 
 class Signal(Base):
     __tablename__ = "signals"
+    __table_args__ = (
+        Index("ix_signals_run_id", "run_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("strategy_runs.id"), nullable=False)
@@ -42,6 +45,9 @@ class Signal(Base):
 
 class TargetPortfolio(Base):
     __tablename__ = "target_portfolios"
+    __table_args__ = (
+        Index("ix_target_portfolios_run_id", "run_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("strategy_runs.id"), nullable=False)
@@ -53,6 +59,9 @@ class TargetPortfolio(Base):
 
 class ExplanationLog(Base):
     __tablename__ = "explanation_logs"
+    __table_args__ = (
+        Index("ix_explanation_logs_run_id", "run_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("strategy_runs.id"), nullable=False)

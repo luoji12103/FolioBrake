@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +32,9 @@ class BacktestRun(Base):
 
 class PortfolioSnapshot(Base):
     __tablename__ = "portfolio_snapshots"
+    __table_args__ = (
+        Index("ix_portfolio_snapshots_run_id", "run_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("backtest_runs.id"), nullable=False)
@@ -44,6 +47,9 @@ class PortfolioSnapshot(Base):
 
 class SimulatedTrade(Base):
     __tablename__ = "simulated_trades"
+    __table_args__ = (
+        Index("ix_simulated_trades_run_id", "run_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("backtest_runs.id"), nullable=False)
@@ -60,6 +66,9 @@ class SimulatedTrade(Base):
 
 class PerformanceMetric(Base):
     __tablename__ = "performance_metrics"
+    __table_args__ = (
+        Index("ix_performance_metrics_run_id", "run_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("backtest_runs.id"), nullable=False)

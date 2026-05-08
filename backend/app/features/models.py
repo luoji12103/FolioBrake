@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -22,6 +22,7 @@ class FeatureValue(Base):
     __table_args__ = (
         UniqueConstraint("instrument_id", "feature_definition_id", "date", "config_hash",
                          name="uq_feature_value"),
+        Index("ix_feature_values_instrument_date", "instrument_id", "date"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

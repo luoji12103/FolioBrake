@@ -118,6 +118,25 @@ def sync_data(
     )
 
 
+@router.post("/sync-async")
+def sync_data_async(payload: SyncRequest):
+    from app.workers.tasks import sync_data as sync_data_task
+    task = sync_data_task.delay(symbols=payload.symbols, start_date=payload.start_date)  # type: ignore[attr-defined]
+    return {"task_id": task.id, "status": "queued", "symbols": payload.symbols}
+
+
+@router.get("/task-status/{task_id}")
+def get_sync_task_status(task_id: str):
+    from app.workers.celery_app import celery_app
+    result = celery_app.AsyncResult(task_id)
+    response = {"task_id": task_id, "status": result.status}
+    if result.status == "PROGRESS":
+        response["progress"] = result.info
+    elif result.ready():
+        response["result"] = result.get()
+    return response
+
+
 @router.get("/sync-progress/{instrument_id}", response_model=SyncProgressOut)
 def get_sync_progress(instrument_id: int) -> SyncProgressOut:
     info = sync_progress.get(instrument_id)
