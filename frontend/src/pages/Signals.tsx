@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import api from "../api/client";
-import { useSignals, usePortfolio, Signal } from "../api/hooks";
+import { useSignals, usePortfolio, useSignalHistory, Signal, SignalHistoryEntry, SignalStatistics } from "../api/hooks";
 import { WeightBarChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import "./shared.css";
@@ -132,12 +132,85 @@ function SignalDetails({ signals }: { signals: Signal[] }) {
   );
 }
 
+function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="card" style={{ flex: 1, minWidth: 160, textAlign: "center" }}>
+      <div className="card-title">{label}</div>
+      <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, color: color || "var(--color-text)", fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SignalHistoryTable({ signals }: { signals: SignalHistoryEntry[] }) {
+  const sorted = useMemo(() => [...signals].sort((a, b) => a.date > b.date ? -1 : 1), [signals]);
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Symbol</th>
+            <th>Score</th>
+            <th>Rank</th>
+            <th>7d Return</th>
+            <th>30d Return</th>
+            <th>Correct</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((s) => (
+            <tr key={`${s.date}-${s.symbol}`}>
+              <td style={{ fontVariantNumeric: "tabular-nums" }}>{s.date}</td>
+              <td style={{ fontWeight: 600, color: "var(--color-accent)" }}>{s.symbol}</td>
+              <td style={{ fontVariantNumeric: "tabular-nums" }}>{s.score.toFixed(1)}</td>
+              <td style={{ color: "var(--color-text-muted)", fontVariantNumeric: "tabular-nums" }}>#{s.rank}</td>
+              <td style={{ fontVariantNumeric: "tabular-nums", color: s.subsequent_return_7d >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+                {(s.subsequent_return_7d * 100).toFixed(2)}%
+              </td>
+              <td style={{ fontVariantNumeric: "tabular-nums", color: s.subsequent_return_30d >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+                {(s.subsequent_return_30d * 100).toFixed(2)}%
+              </td>
+              <td>
+                <span className={`badge ${s.is_correct ? "badge-ok" : "badge-fail"}`}>
+                  {s.is_correct ? "Yes" : "No"}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SignalHistory({ data }: { data: { signals: SignalHistoryEntry[]; statistics: SignalStatistics } }) {
+  const { signals, statistics: stats } = data;
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "var(--space-4)", marginBottom: "var(--space-6)", flexWrap: "wrap" }}>
+        <StatCard label="Total Signals" value={String(stats.total_signals)} />
+        <StatCard label="7d Accuracy" value={`${(stats.accuracy_7d * 100).toFixed(1)}%`} color={stats.accuracy_7d >= 0.5 ? "var(--color-green)" : "var(--color-red)"} />
+        <StatCard label="30d Accuracy" value={`${(stats.accuracy_30d * 100).toFixed(1)}%`} color={stats.accuracy_30d >= 0.5 ? "var(--color-green)" : "var(--color-red)"} />
+        <StatCard label="Avg 7d Return" value={`${(stats.avg_return_7d * 100).toFixed(2)}%`} color={stats.avg_return_7d >= 0 ? "var(--color-green)" : "var(--color-red)"} />
+        <StatCard label="Avg 30d Return" value={`${(stats.avg_return_30d * 100).toFixed(2)}%`} color={stats.avg_return_30d >= 0 ? "var(--color-green)" : "var(--color-red)"} />
+      </div>
+      <div className="card">
+        <SignalHistoryTable signals={signals} />
+      </div>
+    </div>
+  );
+}
+
 function Signals() {
   const { data: signals, error, isLoading, refetch } = useSignals();
   const { data: portfolio, isLoading: portfolioLoading, error: portfolioError } = usePortfolio();
+  const { data: historyData, isLoading: historyLoading } = useSignalHistory();
   const [paperId, setPaperId] = useState<number | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyMsg, setApplyMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"current" | "history">("current");
 
   const handleCreateAndApply = async () => {
     setApplying(true); setApplyMsg(null);
@@ -166,53 +239,86 @@ function Signals() {
     <div className="page">
       <h2>Weekly Signals</h2>
 
-      {isLoading && <SignalSkeleton />}
+      <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
+        <button
+          className={activeTab === "current" ? "btn-primary" : "btn-secondary"}
+          onClick={() => setActiveTab("current")}
+        >
+          Current Signals
+        </button>
+        <button
+          className={activeTab === "history" ? "btn-primary" : "btn-secondary"}
+          onClick={() => setActiveTab("history")}
+        >
+          Signal History
+        </button>
+      </div>
 
-      {error && <ErrorMessage message={`Failed to load signals: ${error}`} onRetry={refetch} />}
-
-      {!isLoading && !error && signals && signals.length === 0 && (
-        <div className="state-banner state-empty">
-          <div className="state-empty-icon">{"\uD83D\uDCC8"}</div>
-          <div className="state-empty-title">No signals generated yet</div>
-          <div className="state-empty-desc">
-            Run a strategy evaluation to produce weekly trading signals.
-          </div>
-        </div>
-      )}
-
-      {!isLoading && !error && signals && signals.length > 0 && (
+      {activeTab === "current" ? (
         <>
-          <div className="card"><SignalsTable signals={signals} /></div>
-          <SignalDetails signals={signals} />
+          {isLoading && <SignalSkeleton />}
+
+          {error && <ErrorMessage message={`Failed to load signals: ${error}`} onRetry={refetch} />}
+
+          {!isLoading && !error && signals && signals.length === 0 && (
+            <div className="state-banner state-empty">
+              <div className="state-empty-icon">{"\uD83D\uDCC8"}</div>
+              <div className="state-empty-title">No signals generated yet</div>
+              <div className="state-empty-desc">
+                Run a strategy evaluation to produce weekly trading signals.
+              </div>
+            </div>
+          )}
+
+          {!isLoading && !error && signals && signals.length > 0 && (
+            <>
+              <div className="card"><SignalsTable signals={signals} /></div>
+              <SignalDetails signals={signals} />
+            </>
+          )}
+
+          {!portfolioLoading && !portfolioError && portfolio && portfolio.length > 0 && (
+            <>
+              <div style={{ marginTop: "var(--space-8)" }}>
+                <h3 className="section-title">Portfolio Weights</h3>
+                <div className="card">
+                  <WeightBarChart
+                    data={portfolio.map((p) => ({
+                      symbol: p.symbol,
+                      target_weight: p.target_weight * 100,
+                    }))}
+                  />
+                </div>
+              </div>
+              <div style={{ marginTop: "var(--space-4)" }}>
+                <h3 className="section-title">Paper Trading</h3>
+                <div className="card" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+                  <button className="btn-primary" onClick={handleCreateAndApply} disabled={applying}>
+                    {applying ? "Applying..." : (paperId ? `Apply to Portfolio #${paperId}` : "Create & Apply")}
+                  </button>
+                  {applyMsg && (
+                    <span className={`toast ${applyMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
+                      {applyMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </>
-      )}
-
-      {!portfolioLoading && !portfolioError && portfolio && portfolio.length > 0 && (
+      ) : (
         <>
-          <div style={{ marginTop: "var(--space-8)" }}>
-            <h3 className="section-title">Portfolio Weights</h3>
-            <div className="card">
-              <WeightBarChart
-                data={portfolio.map((p) => ({
-                  symbol: p.symbol,
-                  target_weight: p.target_weight * 100,
-                }))}
-              />
+          {historyLoading && <SignalSkeleton />}
+          {!historyLoading && historyData && <SignalHistory data={historyData} />}
+          {!historyLoading && !historyData && (
+            <div className="state-banner state-empty">
+              <div className="state-empty-icon">{"\uD83D\uDCC8"}</div>
+              <div className="state-empty-title">No signal history available</div>
+              <div className="state-empty-desc">
+                Historical signal accuracy data will appear here once signals have been tracked over time.
+              </div>
             </div>
-          </div>
-          <div style={{ marginTop: "var(--space-4)" }}>
-            <h3 className="section-title">Paper Trading</h3>
-            <div className="card" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-              <button className="btn-primary" onClick={handleCreateAndApply} disabled={applying}>
-                {applying ? "Applying..." : (paperId ? `Apply to Portfolio #${paperId}` : "Create & Apply")}
-              </button>
-              {applyMsg && (
-                <span className={`toast ${applyMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
-                  {applyMsg}
-                </span>
-              )}
-            </div>
-          </div>
+          )}
         </>
       )}
     </div>

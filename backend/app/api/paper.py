@@ -1,4 +1,7 @@
+from collections import defaultdict
 from datetime import date as date_type
+
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -202,3 +205,136 @@ def get_ledger(portfolio_id: int, db: Session = Depends(get_db)):
     ).scalars().all())
     return [{"date": str(e.date), "entry_type": e.entry_type, "amount": e.amount, "description": e.description}
             for e in entries]
+
+
+@router.get("/performance/{portfolio_id}")
+def get_performance(portfolio_id: int, start_date: str = Query(None), end_date: str = Query(None), db: Session = Depends(get_db)):
+    """Compute historical portfolio performance: equity curve, benchmark, drawdown, metrics, monthly returns."""
+    pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == portfolio_id)).scalar_one_or_none()
+    if not pf:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    entries = list(db.execute(
+        select(PaperLedger).where(PaperLedger.portfolio_id == portfolio_id).order_by(PaperLedger.date)
+    ).scalars().all())
+    if not entries:
+        return {"portfolio_id": portfolio_id, "equity_curve": [], "benchmark_curve": [],
+                "drawdown_curve": [], "metrics": {}, "monthly_returns": []}
+
+    orders = list(db.execute(
+        select(PaperOrder).where(PaperOrder.portfolio_id == portfolio_id).order_by(PaperOrder.date)
+    ).scalars().all())
+
+    instrument_ids = list(set(o.instrument_id for o in orders))
+    benchmark_id = 1
+    all_instrument_ids = list(set(instrument_ids + [benchmark_id]))
+
+    bars_by_inst: dict[int, dict] = defaultdict(dict)
+    all_bars = list(db.execute(
+        select(DailyBar).where(DailyBar.instrument_id.in_(all_instrument_ids)).order_by(DailyBar.trade_date)
+    ).scalars().all())
+    for bar in all_bars:
+        bars_by_inst[bar.instrument_id][bar.trade_date] = bar.close
+
+    all_dates = sorted(set(d for inst_bars in bars_by_inst.values() for d in inst_bars))
+    first_date = entries[0].date
+    if start_date:
+        all_dates = [d for d in all_dates if d >= date_type.fromisoformat(start_date)]
+    else:
+        all_dates = [d for d in all_dates if d >= first_date]
+    if end_date:
+        all_dates = [d for d in all_dates if d <= date_type.fromisoformat(end_date)]
+
+    if not all_dates:
+        return {"portfolio_id": portfolio_id, "equity_curve": [], "benchmark_curve": [],
+                "drawdown_curve": [], "metrics": {}, "monthly_returns": []}
+
+    cash_by_date: dict = {}
+    running_cash = 0.0
+    entry_idx = 0
+    for d in all_dates:
+        while entry_idx < len(entries) and entries[entry_idx].date <= d:
+            running_cash += entries[entry_idx].amount
+            entry_idx += 1
+        cash_by_date[d] = running_cash
+
+    position_qty: dict[int, float] = defaultdict(float)
+    order_idx = 0
+    positions_by_date: dict = {}
+    for d in all_dates:
+        while order_idx < len(orders) and orders[order_idx].date <= d:
+            o = orders[order_idx]
+            if o.side == "BUY":
+                position_qty[o.instrument_id] += o.quantity
+            else:
+                position_qty[o.instrument_id] -= o.quantity
+            order_idx += 1
+        positions_by_date[d] = dict(position_qty)
+
+    equity_curve = []
+    for d in all_dates:
+        cash = cash_by_date[d]
+        holdings = sum(
+            positions_by_date[d].get(inst_id, 0) * bars_by_inst[inst_id].get(d, 0)
+            for inst_id in instrument_ids
+        )
+        equity_curve.append({"date": d.isoformat(), "equity": round(cash + holdings, 2)})
+
+    start_equity = equity_curve[0]["equity"]
+    benchmark_curve = []
+    if benchmark_id in bars_by_inst:
+        bench_prices = [bars_by_inst[benchmark_id].get(d) for d in all_dates]
+        first_bench = next((p for p in bench_prices if p is not None), None)
+        if first_bench and first_bench > 0:
+            for d, p in zip(all_dates, bench_prices):
+                if p is not None:
+                    benchmark_curve.append({
+                        "date": d.isoformat(),
+                        "value": round(start_equity * (p / first_bench), 2),
+                    })
+
+    drawdown_curve = []
+    peak = 0.0
+    for point in equity_curve:
+        eq = point["equity"]
+        peak = max(peak, eq)
+        dd = ((eq - peak) / peak * 100) if peak > 0 else 0.0
+        drawdown_curve.append({"date": point["date"], "drawdown": round(dd, 4)})
+
+    eq_values = np.array([p["equity"] for p in equity_curve])
+    metrics = {}
+    if len(eq_values) > 1:
+        daily_returns = np.diff(eq_values) / eq_values[:-1]
+        n_days = (all_dates[-1] - all_dates[0]).days
+        n_years = max(n_days / 365.25, 0.01)
+        running_max = np.maximum.accumulate(eq_values)
+        dd_series = (eq_values - running_max) / running_max
+
+        metrics = {
+            "total_return": round(float((eq_values[-1] / eq_values[0] - 1) * 100), 2),
+            "cagr": round(float(((eq_values[-1] / eq_values[0]) ** (1 / n_years) - 1) * 100) if eq_values[0] > 0 else 0, 2),
+            "sharpe_ratio": round(float(np.mean(daily_returns) / np.std(daily_returns) * np.sqrt(252)) if np.std(daily_returns) > 0 else 0, 4),
+            "max_drawdown": round(float(np.min(dd_series) * 100), 2),
+            "volatility": round(float(np.std(daily_returns) * np.sqrt(252) * 100), 2),
+            "win_rate": round(float(np.sum(daily_returns > 0) / len(daily_returns) * 100), 2),
+        }
+
+    monthly_returns = []
+    monthly_buckets: dict[str, list[float]] = defaultdict(list)
+    for point in equity_curve:
+        monthly_buckets[point["date"][:7]].append(point["equity"])
+    prev_end = None
+    for month in sorted(monthly_buckets):
+        month_end = monthly_buckets[month][-1]
+        if prev_end is not None and prev_end > 0:
+            monthly_returns.append({"month": month, "return": round((month_end / prev_end - 1) * 100, 2)})
+        prev_end = month_end
+
+    return {
+        "portfolio_id": portfolio_id,
+        "equity_curve": equity_curve,
+        "benchmark_curve": benchmark_curve,
+        "drawdown_curve": drawdown_curve,
+        "metrics": metrics,
+        "monthly_returns": monthly_returns,
+    }

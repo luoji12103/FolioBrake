@@ -2,7 +2,7 @@ from datetime import date
 from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
-from app.risk.models import RiskStateRecord, RiskRuleResultRecord
+from app.risk.models import RiskStateRecord, RiskRuleResultRecord, RiskAlert
 
 STATE_ORDER = {"NORMAL": 0, "CAUTION": 1, "DEFENSIVE": 2, "HALT": 3}
 STATES_BY_INDEX = ["NORMAL", "CAUTION", "DEFENSIVE", "HALT"]
@@ -49,5 +49,25 @@ class RiskStateMachine:
 
         record = RiskStateRecord(date=date.today(), state=new_state, transition_reason=reason)
         self.db.add(record)
+        self.db.flush()
+
+        if current_state != new_state:
+            severity = "CRITICAL" if new_state == "HALT" else ("WARNING" if new_state in ("DEFENSIVE", "CAUTION") else "INFO")
+            self.db.add(RiskAlert(
+                alert_type="STATE_CHANGE",
+                severity=severity,
+                title=f"Risk state changed: {current_state} → {new_state}",
+                message=reason,
+            ))
+
+        for r in rule_results:
+            if r.triggered:
+                self.db.add(RiskAlert(
+                    alert_type="SIGNAL_GENERATED",
+                    severity=r.severity,
+                    title=f"Risk signal: {r.rule_name}",
+                    message=f"Rule '{r.rule_name}' triggered with severity {r.severity}. Detail: {r.detail}",
+                ))
+
         self.db.flush()
         return record

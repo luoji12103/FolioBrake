@@ -52,3 +52,15 @@ class RiskOverlayDecisionRecord(Base):
     reason: Mapped[str] = mapped_column(Text, nullable=True)
     decision: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RiskAlert(Base):
+    __tablename__ = "risk_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    alert_type: Mapped[str] = mapped_column(String(50))  # STATE_CHANGE, SIGNAL_GENERATED, AUDIT_COMPLETE
+    severity: Mapped[str] = mapped_column(String(20))  # INFO, WARNING, CRITICAL
+    title: Mapped[str] = mapped_column(String(200))
+    message: Mapped[str] = mapped_column(Text)
+    read: Mapped[bool] = mapped_column(Boolean, default=False)

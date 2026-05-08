@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 
 from app.db.base import get_db
-from app.risk.models import RiskStateRecord, RiskRuleResultRecord, RiskOverlayDecisionRecord
+from app.risk.models import RiskStateRecord, RiskRuleResultRecord, RiskOverlayDecisionRecord, RiskAlert
 from app.data.models import Instrument
 from app.risk.correlation import CorrelationMonitor
 from app.risk.var import compute_tail_metrics
@@ -33,6 +33,31 @@ def get_state_history(db: Session = Depends(get_db)):
         {"date": str(s.date), "state": s.state, "state_code": STATE_MAP.get(s.state, 0), "reason": s.transition_reason}
         for s in reversed(states)
     ]
+
+
+@router.get("/alerts")
+def get_alerts(limit: int = Query(20), db: Session = Depends(get_db)):
+    alerts = list(db.execute(
+        select(RiskAlert).order_by(RiskAlert.timestamp.desc()).limit(limit)
+    ).scalars().all())
+    unread = db.execute(
+        select(func.count()).where(RiskAlert.read == False)
+    ).scalar()
+    return {
+        "alerts": [
+            {
+                "id": a.id,
+                "timestamp": str(a.timestamp),
+                "type": a.alert_type,
+                "severity": a.severity,
+                "title": a.title,
+                "message": a.message,
+                "read": a.read,
+            }
+            for a in alerts
+        ],
+        "unread_count": unread or 0,
+    }
 
 
 @router.get("/rules")

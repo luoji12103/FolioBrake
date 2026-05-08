@@ -52,6 +52,32 @@ export function useHealth() {
 }
 
 // ---------------------------------------------------------------------------
+// Data Health
+// ---------------------------------------------------------------------------
+
+export interface DataHealth {
+  sources: {
+    name: string;
+    status: string;
+    instruments_count: number;
+    bars_count: number;
+  }[];
+  data_quality: {
+    total_instruments: number;
+    instruments_with_gaps: number;
+    latest_bar_date: string | null;
+    stale_instruments: number;
+  };
+}
+
+export function useDataHealth() {
+  return useQuery(async () => {
+    const { data } = await api.get("/data/health");
+    return data as DataHealth;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Instruments (ETF universe)
 // ---------------------------------------------------------------------------
 
@@ -153,6 +179,38 @@ export function useSignals() {
 }
 
 // ---------------------------------------------------------------------------
+// Signal History
+// ---------------------------------------------------------------------------
+
+export interface SignalHistoryEntry {
+  id: number;
+  date: string;
+  instrument_id: number;
+  symbol: string;
+  score: number;
+  rank: number;
+  reason: Record<string, any>;
+  subsequent_return_7d: number;
+  subsequent_return_30d: number;
+  is_correct: boolean;
+}
+
+export interface SignalStatistics {
+  total_signals: number;
+  accuracy_7d: number;
+  accuracy_30d: number;
+  avg_return_7d: number;
+  avg_return_30d: number;
+}
+
+export function useSignalHistory() {
+  return useQuery(async () => {
+    const { data } = await api.get("/strategy/signal-history");
+    return data as { signals: SignalHistoryEntry[]; statistics: SignalStatistics };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Portfolio
 // ---------------------------------------------------------------------------
 
@@ -221,6 +279,27 @@ export function useRiskOverlay() {
   return useQuery(async () => {
     const { data } = await api.get("/risk/overlay");
     return data as OverlayDecision;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Risk Alerts
+// ---------------------------------------------------------------------------
+
+export interface RiskAlert {
+  id: number;
+  timestamp: string;
+  type: string;
+  severity: "INFO" | "WARNING" | "CRITICAL";
+  title: string;
+  message: string;
+  read: boolean;
+}
+
+export function useRiskAlerts() {
+  return useQuery(async () => {
+    const { data } = await api.get("/risk/alerts");
+    return data as { alerts: RiskAlert[]; unread_count: number };
   });
 }
 
@@ -355,6 +434,58 @@ export function usePaperPnl(portfolioId: string | null) {
     if (!portfolioId) return null;
     const { data } = await api.get(`/paper/pnl/${portfolioId}`);
     return data as PnLSnapshot;
+  }, [portfolioId]);
+
+  return useQuery(fetcher);
+}
+
+// ---------------------------------------------------------------------------
+// Paper Portfolios
+// ---------------------------------------------------------------------------
+
+export interface PaperPortfolio {
+  id: number;
+  name: string;
+  initial_capital: number;
+  created_at: string;
+}
+
+export function usePaperPortfolios() {
+  return useQuery(async () => {
+    const { data } = await api.get("/paper/portfolios");
+    return data as PaperPortfolio[];
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Paper Performance
+// ---------------------------------------------------------------------------
+
+export interface PaperPerformance {
+  portfolio_id: number;
+  equity_curve: { date: string; value: number }[];
+  benchmark_curve: { date: string; value: number }[];
+  drawdown_curve: { date: string; drawdown: number }[];
+  metrics: {
+    total_return: number;
+    cagr: number;
+    sharpe_ratio: number;
+    max_drawdown: number;
+    volatility: number;
+    win_rate: number;
+  };
+  monthly_returns: { month: string; return: number }[];
+}
+
+export function usePaperPerformance(portfolioId: string | null) {
+  const fetcher = useCallback(async () => {
+    if (!portfolioId) return null;
+    try {
+      const { data } = await api.get(`/paper/performance/${portfolioId}`);
+      return data as PaperPerformance;
+    } catch {
+      return null;
+    }
   }, [portfolioId]);
 
   return useQuery(fetcher);

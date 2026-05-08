@@ -225,6 +225,51 @@ def get_quality(symbol: str, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/health")
+def get_data_health(db: Session = Depends(get_db)):
+    """Return data source health and quality metrics."""
+    from sqlalchemy import func
+    
+    # Count instruments
+    total_instruments = db.execute(select(func.count(Instrument.id))).scalar() or 0
+    
+    # Get latest bar date
+    latest_bar = db.execute(
+        select(DailyBar.trade_date).order_by(DailyBar.trade_date.desc()).limit(1)
+    ).scalar_one_or_none()
+    
+    # Count total bars
+    total_bars = db.execute(select(func.count(DailyBar.id))).scalar() or 0
+    
+    # Count instruments with recent data (within 7 days)
+    from datetime import datetime, timedelta
+    week_ago = datetime.now().date() - timedelta(days=7)
+    instruments_with_recent = db.execute(
+        select(func.count(func.distinct(DailyBar.instrument_id)))
+        .where(DailyBar.trade_date >= week_ago)
+    ).scalar() or 0
+    
+    # Count stale instruments (no data in last 7 days)
+    stale_instruments = total_instruments - instruments_with_recent
+    
+    return {
+        "sources": [
+            {
+                "name": "akshare",
+                "status": "healthy" if total_bars > 0 else "no_data",
+                "instruments_count": total_instruments,
+                "bars_count": total_bars
+            }
+        ],
+        "data_quality": {
+            "total_instruments": total_instruments,
+            "instruments_with_gaps": stale_instruments,
+            "latest_bar_date": str(latest_bar) if latest_bar else None,
+            "stale_instruments": stale_instruments
+        }
+    }
+
+
 @router.get("/sources")
 def get_data_sources(db: Session = Depends(get_db)):
     """Return data source health status."""

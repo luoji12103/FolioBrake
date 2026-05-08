@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { healthCheck } from "../api/client";
-import { useRiskState, useSignals, usePortfolio } from "../api/hooks";
+import { useRiskState, useSignals, usePortfolio, usePaperPortfolios, usePaperPerformance } from "../api/hooks";
+import { EquityChart, DrawdownChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import "./shared.css";
 
@@ -26,6 +27,8 @@ function Dashboard() {
   const { data: riskState } = useRiskState();
   const { data: signals } = useSignals();
   const { data: portfolio } = usePortfolio();
+  const { data: portfolios } = usePaperPortfolios();
+  const { data: performance } = usePaperPerformance(portfolios?.[0]?.id?.toString() || null);
 
   const fetchHealth = () => {
     setError(null);
@@ -95,6 +98,34 @@ function Dashboard() {
           <div className="metric-card">
             <div className="metric-label">Next Rebalance</div>
             <div className="metric-value" style={{ fontSize: "var(--text-xl)" }}>Friday</div>
+          </div>
+        </div>
+      )}
+
+      {performance && performance.equity_curve.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card-title">Portfolio Performance</div>
+          <EquityChart data={performance.equity_curve} benchmarkData={performance.benchmark_curve} />
+          <div style={{ marginTop: 16 }}>
+            <DrawdownChart data={performance.drawdown_curve} />
+          </div>
+          <div className="metric-grid" style={{ marginTop: 16 }}>
+            <div className="metric-card">
+              <div className="metric-label">CAGR</div>
+              <div className="metric-value">{(performance.metrics.cagr * 100).toFixed(1)}%</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Sharpe</div>
+              <div className="metric-value">{performance.metrics.sharpe_ratio.toFixed(2)}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Max DD</div>
+              <div className="metric-value">{(performance.metrics.max_drawdown * 100).toFixed(1)}%</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Win Rate</div>
+              <div className="metric-value">{(performance.metrics.win_rate * 100).toFixed(0)}%</div>
+            </div>
           </div>
         </div>
       )}

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { useRiskState } from "../api/hooks";
+import { useRiskState, useRiskAlerts } from "../api/hooks";
 import RiskBadge from "./RiskBadge";
 import "./Layout.css";
 
 function Layout() {
   const { data: riskState } = useRiskState();
+  const { data: alertsData } = useRiskAlerts();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -47,7 +49,42 @@ function Layout() {
           </button>
           <h1 className="logo">FolioBrake</h1>
         </div>
-        <RiskBadge state={riskState?.state || "NORMAL"} />
+        <div className="header-right">
+          <RiskBadge state={riskState?.state || "NORMAL"} />
+          <div style={{ position: "relative" }}>
+            <button
+              className="icon-btn"
+              onClick={() => setAlertsOpen(!alertsOpen)}
+              aria-label="Notifications"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              {alertsData && alertsData.unread_count > 0 && (
+                <span className="notification-badge">{alertsData.unread_count}</span>
+              )}
+            </button>
+            {alertsOpen && (
+              <div className="alerts-panel">
+                <div className="alerts-header">
+                  <span>Notifications</span>
+                  <button className="alerts-close" onClick={() => setAlertsOpen(false)}>✕</button>
+                </div>
+                {alertsData?.alerts.map(alert => (
+                  <div key={alert.id} className={`alert-item alert-${alert.severity.toLowerCase()}`}>
+                    <div className="alert-title">{alert.title}</div>
+                    <div className="alert-message">{alert.message}</div>
+                    <div className="alert-time">{new Date(alert.timestamp).toLocaleString()}</div>
+                  </div>
+                ))}
+                {(!alertsData || alertsData.alerts.length === 0) && (
+                  <div className="alert-empty">No notifications</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </header>
       <nav className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         {navLinks}

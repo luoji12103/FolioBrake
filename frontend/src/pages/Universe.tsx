@@ -1,7 +1,7 @@
 import { useState } from "react";
 import api from "../api/client";
 import { ErrorMessage } from "../components/ErrorMessage";
-import { useInstruments, Instrument } from "../api/hooks";
+import { useInstruments, useDataHealth, Instrument } from "../api/hooks";
 import "./shared.css";
 
 function formatDate(d: string | null): string {
@@ -125,6 +125,7 @@ function UniverseSkeleton() {
 }
 
 function Universe() {
+  const { data: health } = useDataHealth();
   const { data: instruments, error, isLoading, refetch } = useInstruments();
   const [newSymbol, setNewSymbol] = useState("");
   const [adding, setAdding] = useState(false);
@@ -165,6 +166,32 @@ function Universe() {
           </span>
         )}
       </div>
+
+      {health && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Data Health</div>
+          <div className="metric-grid">
+            <div className="metric-card">
+              <div className="metric-label">Total Instruments</div>
+              <div className="metric-value">{health.data_quality.total_instruments}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Total Bars</div>
+              <div className="metric-value">{health.sources[0]?.bars_count?.toLocaleString() || 0}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Latest Data</div>
+              <div className="metric-value">{health.data_quality.latest_bar_date || "N/A"}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Stale Instruments</div>
+              <div className="metric-value" style={{ color: health.data_quality.stale_instruments > 0 ? "var(--color-yellow)" : "var(--color-green)" }}>
+                {health.data_quality.stale_instruments}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isLoading && <UniverseSkeleton />}
 
