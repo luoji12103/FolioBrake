@@ -87,7 +87,15 @@ class SyncProgressOut(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/sync", response_model=SyncSummary)
+@router.post(
+    "/sync",
+    response_model=SyncSummary,
+    summary="Sync ETF data",
+    description=(
+        "Fetch OHLCV bars for one or more ETF symbols from the configured data source "
+        "(AKShare by default). Creates instrument records if they don't exist."
+    ),
+)
 def sync_data(
     payload: SyncRequest,
     db: Session = Depends(get_db),
@@ -150,7 +158,12 @@ def get_sync_progress(instrument_id: int) -> SyncProgressOut:
     )
 
 
-@router.get("/instruments", response_model=list[InstrumentOut])
+@router.get(
+    "/instruments",
+    response_model=list[InstrumentOut],
+    summary="List ETF universe",
+    description="Return all ETF instruments in the database, ordered by symbol.",
+)
 def list_instruments(db: Session = Depends(get_db)) -> list[Instrument]:
     """Return all instruments in the database."""
     stmt = select(Instrument).order_by(Instrument.symbol)
@@ -172,7 +185,12 @@ def add_instrument(req: AddInstrumentRequest, db: Session = Depends(get_db)):
     return inst
 
 
-@router.get("/bars/{symbol}", response_model=list[BarOut])
+@router.get(
+    "/bars/{symbol}",
+    response_model=list[BarOut],
+    summary="Get OHLCV bars",
+    description="Return daily OHLCV bars for a given ETF symbol within the specified date range.",
+)
 def get_bars(
     symbol: str,
     start_date: str = Query(default="20240101", pattern=r"^\d{8}$"),

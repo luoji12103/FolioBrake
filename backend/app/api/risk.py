@@ -12,7 +12,25 @@ from app.risk.var import compute_tail_metrics
 router = APIRouter(tags=["risk"])
 
 
-@router.get("/state")
+@router.get(
+    "/state",
+    summary="Current risk state",
+    description=(
+        "Returns the current risk regime state. Possible values: "
+        "NORMAL (full exposure), CAUTION (reduced exposure), "
+        "DEFENSIVE (minimal exposure), HALT (no new trades)."
+    ),
+    responses={
+        200: {
+            "description": "Current risk state",
+            "content": {
+                "application/json": {
+                    "example": {"date": "2026-05-08", "state": "NORMAL", "transition_reason": "default"}
+                }
+            },
+        }
+    },
+)
 def get_risk_state(db: Session = Depends(get_db)):
     state = db.execute(
         select(RiskStateRecord).order_by(desc(RiskStateRecord.date)).limit(1)

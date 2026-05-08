@@ -27,7 +27,14 @@ class SignalOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.post("/run")
+@router.post(
+    "/run",
+    summary="Run strategy engine",
+    description=(
+        "Execute the risk-aware ETF rotation strategy for a given date. "
+        "Generates ranked signals, applies risk scaling, and produces a target portfolio."
+    ),
+)
 def run_strategy(req: RunRequest, db: Session = Depends(get_db)):
     config = db.execute(select(StrategyConfig).limit(1)).scalar_one_or_none()
     if not config:

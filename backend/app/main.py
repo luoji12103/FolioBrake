@@ -78,31 +78,135 @@ async def lifespan(app: FastAPI):
 
 
 _openapi_tags = [
-    {"name": "data", "description": "ETF data sync and retrieval"},
-    {"name": "features", "description": "Feature engineering and factor registry"},
-    {"name": "risk", "description": "Risk state machine, alerts, VaR, and overlays"},
-    {"name": "strategy", "description": "Strategy rotation and constraints"},
-    {"name": "backtest", "description": "Historical backtesting engine"},
-    {"name": "audit", "description": "Trade audit and grading"},
-    {"name": "paper", "description": "Paper-trading engine"},
-    {"name": "analysis", "description": "Technical indicators, stress tests, Monte Carlo"},
-    {"name": "reports", "description": "PDF/HTML report generation"},
-    {"name": "configuration", "description": "Runtime configuration management with version control"},
-    {"name": "monitoring", "description": "Health, metrics, and observability"},
+    {
+        "name": "data",
+        "description": (
+            "ETF data sync and retrieval. Manage the instrument universe, "
+            "sync OHLCV bars from AKShare/Tushare, and check data quality."
+        ),
+    },
+    {
+        "name": "features",
+        "description": (
+            "Feature engineering and factor registry. Compute technical indicators, "
+            "momentum scores, volatility metrics, and custom factors for strategy input."
+        ),
+    },
+    {
+        "name": "risk",
+        "description": (
+            "Risk state machine, alerts, VaR, and overlays. Provides the 4-state "
+            "risk regime (NORMAL/CAUTION/DEFENSIVE/HALT), correlation monitoring, "
+            "and tail-risk metrics."
+        ),
+    },
+    {
+        "name": "strategy",
+        "description": (
+            "Strategy rotation and constraints. Run the risk-aware ETF rotation "
+            "engine, generate ranked signals, and produce target portfolios with "
+            "risk-adjusted weights."
+        ),
+    },
+    {
+        "name": "backtest",
+        "description": (
+            "Historical backtesting engine. Simulate strategy performance over "
+            "past data with realistic cost models, compute Sharpe/drawdown/win-rate, "
+            "and compare against benchmarks."
+        ),
+    },
+    {
+        "name": "audit",
+        "description": (
+            "Trade audit and grading. Walk-forward validation, parameter stability "
+            "checks, cost-stress analysis, and regime slicing to verify strategy robustness."
+        ),
+    },
+    {
+        "name": "paper",
+        "description": (
+            "Paper-trading engine. Create simulated portfolios, execute virtual trades, "
+            "track P&L and position sizing without risking real capital."
+        ),
+    },
+    {
+        "name": "analysis",
+        "description": (
+            "Technical indicators, stress tests, Monte Carlo simulations, and "
+            "scenario analysis for portfolio and individual ETF evaluation."
+        ),
+    },
+    {
+        "name": "reports",
+        "description": "PDF/HTML report generation for portfolio summaries and risk analysis.",
+    },
+    {
+        "name": "configuration",
+        "description": (
+            "Runtime configuration management with version control. Update strategy "
+            "parameters, risk thresholds, and system settings with full audit trail."
+        ),
+    },
+    {
+        "name": "ml",
+        "description": (
+            "Machine learning models for return prediction, regime classification, "
+            "and anomaly detection using historical feature data."
+        ),
+    },
+    {
+        "name": "nlp",
+        "description": (
+            "Natural language processing for sentiment analysis of financial news "
+            "and market commentary affecting A-share ETFs."
+        ),
+    },
+    {
+        "name": "auth",
+        "description": "API key authentication and user management.",
+    },
+    {
+        "name": "social",
+        "description": "Social sentiment signals and community-driven market indicators.",
+    },
+    {
+        "name": "monitoring",
+        "description": "Health checks, Prometheus metrics, and system observability endpoints.",
+    },
 ]
 
 app = FastAPI(
-    title="Retail ETF Guardian API",
+    title="FolioBrake API",
     version="0.2.0",
     description=(
-        "Risk-aware ETF rotation, audit, and do-not-trade backend.\n\n"
-        "Provides data sync, feature engineering, risk state machine, "
-        "backtesting, paper trading, and reporting for A-share ETFs."
+        "Risk-aware ETF rotation, audit, and paper-trading backend for A-share markets.\n\n"
+        "## Features\n"
+        "- **Data sync**: Ingest OHLCV bars from AKShare, Tushare, or efinance\n"
+        "- **Feature engineering**: 17+ built-in factors (momentum, volatility, drawdown, liquidity)\n"
+        "- **Risk state machine**: 4-state regime detection with automatic exposure scaling\n"
+        "- **Strategy engine**: Risk-aware ETF rotation with configurable constraints\n"
+        "- **Backtesting**: Walk-forward validation with realistic cost models\n"
+        "- **Audit gatekeeper**: Multi-dimensional trade grading before execution\n"
+        "- **Paper trading**: Simulated portfolio management with P&L tracking\n"
+        "- **ML/NLP**: Return prediction models and news sentiment analysis\n\n"
+        "## Authentication\n"
+        "Endpoints under `/api/auth` require a valid API key passed via the `X-API-Key` header.\n\n"
+        "## Rate Limiting\n"
+        "Default: 100 requests per 60 seconds per client IP."
     ),
     openapi_tags=_openapi_tags,
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
+    contact={
+        "name": "FolioBrake Team",
+        "url": "https://github.com/foliobrake",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
 )
 
 app.add_middleware(
@@ -136,7 +240,18 @@ app.include_router(social_router, prefix="/api/social", tags=["social"])
 app.include_router(config_router, prefix="/api/config", tags=["configuration"])
 
 
-@app.get("/api/health", tags=["monitoring"])
+@app.get(
+    "/api/health",
+    tags=["monitoring"],
+    summary="Health check",
+    description="Returns service status and version. Use for liveness probes and uptime monitoring.",
+    responses={
+        200: {
+            "description": "Service is healthy",
+            "content": {"application/json": {"example": {"status": "ok", "version": "0.2.0"}}},
+        }
+    },
+)
 def health() -> dict[str, str]:
     return {"status": "ok", "version": "0.2.0"}
 

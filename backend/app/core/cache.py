@@ -17,7 +17,14 @@ def get_redis() -> redis.Redis | None:
     global redis_client
     if redis_client is None:
         try:
-            redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+            redis_client = redis.from_url(
+                settings.REDIS_URL,
+                decode_responses=True,
+                max_connections=settings.REDIS_MAX_CONNECTIONS,
+                socket_timeout=5,
+                socket_connect_timeout=5,
+                retry_on_timeout=True,
+            )
             redis_client.ping()
         except redis.ConnectionError:
             logger.warning("Redis unavailable — caching disabled")

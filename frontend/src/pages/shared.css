@@ -741,6 +741,134 @@ select.form-input {
   }
 }
 
+/* ---- 360px: Extra-small phones (SE, Mini) ---- */
+@media (max-width: 360px) {
+  .metrics-grid,
+  .metric-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .metric-card {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .metric-value {
+    font-size: var(--text-base);
+  }
+
+  .metric-value.primary {
+    font-size: var(--text-xl);
+  }
+
+  .card {
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+  }
+
+  .page h2 {
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-3);
+  }
+
+  table {
+    min-width: 320px;
+    font-size: var(--text-xs);
+  }
+
+  thead th,
+  tbody td {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .btn,
+  .btn-primary,
+  .btn-secondary {
+    padding: 6px var(--space-3);
+    font-size: var(--text-xs);
+    min-height: 40px;
+  }
+
+  .form-input {
+    padding: 8px var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .badge {
+    padding: 2px 6px;
+    font-size: 9px;
+  }
+}
+
+/* ---- Safe-area insets for notched devices ---- */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .layout {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .header {
+    padding-left: max(var(--space-6), env(safe-area-inset-left));
+    padding-right: max(var(--space-6), env(safe-area-inset-right));
+  }
+
+  .sidebar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .main {
+    padding-bottom: max(var(--space-8), env(safe-area-inset-bottom));
+  }
+
+  .modal-content {
+    padding-bottom: max(var(--space-6), env(safe-area-inset-bottom));
+  }
+}
+
+/* ---- Touch improvements: larger hit targets on mobile ---- */
+@media (pointer: coarse) {
+  .btn,
+  .btn-primary,
+  .btn-secondary {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  thead th,
+  tbody td {
+    padding: var(--space-3) var(--space-3);
+  }
+
+  .expandable-header {
+    min-height: 44px;
+    padding: var(--space-3) 0;
+  }
+
+  .form-input {
+    min-height: 44px;
+    font-size: 16px; /* Prevent iOS zoom on focus */
+  }
+
+  select.form-input {
+    min-height: 44px;
+  }
+}
+
+/* ---- Landscape phones: reduce vertical padding ---- */
+@media (max-height: 500px) and (orientation: landscape) {
+  .metric-card {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .card {
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .page h2 {
+    margin-bottom: var(--space-3);
+  }
+}
+
 .expandable-header {
   display: flex;
   align-items: center;

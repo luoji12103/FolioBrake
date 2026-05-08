@@ -24,7 +24,15 @@ class BacktestConfigRequest(BaseModel):
     benchmark_symbol: str = "510050"
 
 
-@router.post("/run")
+@router.post(
+    "/run",
+    summary="Run backtest",
+    description=(
+        "Execute a historical backtest with the specified strategy configuration. "
+        "Simulates trading over the date range with realistic cost models "
+        "(commission: 3bps, slippage: 10bps). Returns run ID for fetching results."
+    ),
+)
 def run_backtest(req: BacktestConfigRequest, db: Session = Depends(get_db)):
     # Look up or create strategy config
     strat_cfg = db.execute(

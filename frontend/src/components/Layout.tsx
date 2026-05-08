@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useRiskState, useRiskAlerts, type AlertCategory } from "../api/hooks";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useI18n } from "../i18n";
 import { Kbd } from "./Kbd";
 import { CommandPalette } from "./CommandPalette";
 import { ShortcutHelper } from "./ShortcutHelper";
@@ -41,10 +42,26 @@ function ThemeToggle({ theme, onToggle }: { theme: string; onToggle: () => void 
   );
 }
 
+function LocaleToggle() {
+  const { locale, setLocale } = useI18n();
+  return (
+    <button
+      className="icon-btn locale-toggle"
+      onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
+      aria-label={`Switch to ${locale === "zh" ? "English" : "中文"}`}
+      title={locale === "zh" ? "English" : "中文"}
+      style={{ fontSize: 12, fontWeight: 700, width: "auto", padding: "0 8px" }}
+    >
+      {locale === "zh" ? "EN" : "中"}
+    </button>
+  );
+}
+
 function Layout() {
   const { data: riskState } = useRiskState();
   const { data: alertsData } = useRiskAlerts();
   const location = useLocation();
+  const { t } = useI18n();
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const [menuOpen, setMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -83,24 +100,24 @@ function Layout() {
   const navLinks = (
     <>
       <div className="nav-group">
-        <div className="nav-group-label">Monitor</div>
-        <a href="/" className={location.pathname === "/" ? "active" : ""} onClick={closeMenu}>Dashboard</a>
-        <a href="/universe" className={location.pathname === "/universe" ? "active" : ""} onClick={closeMenu}>Universe</a>
+        <div className="nav-group-label">{t("nav.monitor")}</div>
+        <a href="/" className={location.pathname === "/" ? "active" : ""} onClick={closeMenu}>{t("nav.dashboard")}</a>
+        <a href="/universe" className={location.pathname === "/universe" ? "active" : ""} onClick={closeMenu}>{t("nav.universe")}</a>
       </div>
       <div className="nav-group">
-        <div className="nav-group-label">Decide</div>
-        <a href="/signals" className={location.pathname === "/signals" ? "active" : ""} onClick={closeMenu}>Signals</a>
-        <a href="/risk" className={location.pathname === "/risk" ? "active" : ""} onClick={closeMenu}>Risk Overlay</a>
+        <div className="nav-group-label">{t("nav.decide")}</div>
+        <a href="/signals" className={location.pathname === "/signals" ? "active" : ""} onClick={closeMenu}>{t("nav.signals")}</a>
+        <a href="/risk" className={location.pathname === "/risk" ? "active" : ""} onClick={closeMenu}>{t("nav.riskOverlay")}</a>
       </div>
       <div className="nav-group">
-        <div className="nav-group-label">Verify</div>
-        <a href="/backtest" className={location.pathname === "/backtest" ? "active" : ""} onClick={closeMenu}>Backtest</a>
-        <a href="/audit" className={location.pathname === "/audit" ? "active" : ""} onClick={closeMenu}>Audit</a>
+        <div className="nav-group-label">{t("nav.verify")}</div>
+        <a href="/backtest" className={location.pathname === "/backtest" ? "active" : ""} onClick={closeMenu}>{t("nav.backtest")}</a>
+        <a href="/audit" className={location.pathname === "/audit" ? "active" : ""} onClick={closeMenu}>{t("nav.audit")}</a>
       </div>
       <div className="nav-group">
-        <div className="nav-group-label">Act</div>
-        <a href="/paper" className={location.pathname === "/paper" ? "active" : ""} onClick={closeMenu}>Paper Portfolio</a>
-        <a href="/settings" className={location.pathname === "/settings" ? "active" : ""} onClick={closeMenu}>Settings</a>
+        <div className="nav-group-label">{t("nav.act")}</div>
+        <a href="/paper" className={location.pathname === "/paper" ? "active" : ""} onClick={closeMenu}>{t("nav.paperPortfolio")}</a>
+        <a href="/settings" className={location.pathname === "/settings" ? "active" : ""} onClick={closeMenu}>{t("nav.settings")}</a>
       </div>
     </>
   );
@@ -112,11 +129,11 @@ function Layout() {
   }, [alertsData, alertFilter]);
 
   const categoryFilters: { key: AlertCategory | "all"; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "risk", label: "Risk" },
-    { key: "signal", label: "Signal" },
-    { key: "trade", label: "Trade" },
-    { key: "system", label: "System" },
+    { key: "all", label: t("common.all") },
+    { key: "risk", label: t("alerts.risk") },
+    { key: "signal", label: t("alerts.signal") },
+    { key: "trade", label: t("alerts.trade") },
+    { key: "system", label: t("alerts.system") },
   ];
 
   return (
@@ -145,6 +162,7 @@ function Layout() {
             <Kbd combo="Ctrl+K" />
           </button>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <LocaleToggle />
           <RiskBadge state={riskState?.state || "NORMAL"} />
           <div style={{ position: "relative" }}>
             <button
@@ -163,7 +181,7 @@ function Layout() {
             {alertsOpen && (
               <div className="alerts-panel">
                 <div className="alerts-header">
-                  <span>Notifications</span>
+                  <span>{t("alerts.title")}</span>
                   <button className="alerts-close" onClick={() => setAlertsOpen(false)}>✕</button>
                 </div>
                 <div className="alerts-filters">
@@ -191,7 +209,7 @@ function Layout() {
                   </div>
                 ))}
                 {filteredAlerts.length === 0 && (
-                  <div className="alert-empty">No notifications</div>
+                  <div className="alert-empty">{t("alerts.noAlerts")}</div>
                 )}
               </div>
             )}

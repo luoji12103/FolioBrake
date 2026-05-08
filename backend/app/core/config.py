@@ -20,5 +20,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_CALLS: int = 100
     RATE_LIMIT_PERIOD: int = 60
 
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
+    REDIS_MAX_CONNECTIONS: int = 20
+
 
 settings = Settings()
