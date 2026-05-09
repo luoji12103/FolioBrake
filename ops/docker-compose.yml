@@ -1,4 +1,4 @@
-name: retail-etf-guardian-backend
+name: retail-etf-guardian
 
 services:
   postgres:
@@ -44,6 +44,16 @@ services:
       redis:
         condition: service_healthy
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "1420:80"
+    depends_on:
+      - api-server
     restart: unless-stopped
 
   prometheus:

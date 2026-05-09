@@ -24,6 +24,7 @@ RUN mkdir -p /usr/local/lib/python3.11/site-packages/efinance/data && \
 
 WORKDIR /app
 COPY app ./app
+COPY alembic.ini .
 
 RUN mkdir -p /app/data/ml_models /app/data/nlp_cache && \
     chmod -R 777 /app/data
