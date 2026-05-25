@@ -390,3 +390,57 @@ def get_performance(portfolio_id: int, start_date: str = Query(None), end_date: 
         "metrics": metrics,
         "monthly_returns": monthly_returns,
     }
+
+
+class ImportHoldingRequest(BaseModel):
+    portfolio_id: int
+    holdings: list[dict]  # [{"symbol": "510050", "quantity": 10000, "avg_cost": 2.50}, ...]
+
+
+@router.post("/import-holdings")
+def import_holdings(req: ImportHoldingRequest, db: Session = Depends(get_db)):
+    """Import holdings from external source (CSV/manual entry)."""
+    from app.data.models import Instrument
+    from app.paper.engine import PaperTradingEngine
+
+    pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == req.portfolio_id)).scalar_one_or_none()
+    if not pf:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    engine = PaperTradingEngine(db)
+    imported = 0
+    errors = []
+
+    for holding in req.holdings:
+        symbol = str(holding.get("symbol", "")).strip().zfill(6)
+        inst = db.execute(select(Instrument).where(Instrument.symbol == symbol)).scalar_one_or_none()
+        if not inst:
+            errors.append({"symbol": symbol, "error": "Instrument not found"})
+            continue
+
+        quantity = float(holding.get("quantity", 0))
+        avg_cost = float(holding.get("avg_cost", 0))
+        if quantity <= 0 or avg_cost <= 0:
+            errors.append({"symbol": symbol, "error": "Invalid quantity or cost"})
+            continue
+
+        existing = db.execute(
+            select(PaperPosition).where(
+                PaperPosition.portfolio_id == req.portfolio_id,
+                PaperPosition.instrument_id == inst.id,
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            total_qty = existing.quantity + quantity
+            existing.avg_cost = (existing.quantity * existing.avg_cost + quantity * avg_cost) / total_qty if total_qty > 0 else avg_cost
+            existing.quantity = total_qty
+        else:
+            pos = PaperPosition(portfolio_id=req.portfolio_id, instrument_id=inst.id, quantity=quantity, avg_cost=avg_cost)
+            db.add(pos)
+
+        db.flush()
+        imported += 1
+
+    db.commit()
+    return {"imported": imported, "errors": errors}
