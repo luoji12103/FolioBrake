@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.data import router as data_router
 from app.api.features import router as features_router
@@ -217,6 +218,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(PrometheusMiddleware)
 

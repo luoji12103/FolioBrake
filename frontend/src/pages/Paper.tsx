@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { DataTable, type ColumnDef } from "../components/DataTable";
-import { usePaperHoldings, usePaperPnl, PaperHolding } from "../api/hooks";
+import { usePaperHoldings, usePaperPnl, PaperHolding, usePaperPortfolios } from "../api/hooks";
 import api from "../api/client";
 import "./shared.css";
 
@@ -615,7 +615,7 @@ function RebalanceButton({ portfolioId }: { portfolioId: string }) {
       {open && targetWeights && (
         <RebalanceDialog
           key={refreshKey}
-          portfolioId={portfolioId}
+          portfolioId={portfolioId!}
           targetWeights={targetWeights}
           signalDate={signalDate}
           onClose={() => setOpen(false)}
@@ -626,10 +626,9 @@ function RebalanceButton({ portfolioId }: { portfolioId: string }) {
   );
 }
 
-const DEFAULT_PORTFOLIO_ID = "default";
-
 function Paper() {
-  const [portfolioId] = useState<string>(DEFAULT_PORTFOLIO_ID);
+  const { data: portfolios } = usePaperPortfolios();
+  const portfolioId = portfolios?.[0]?.id?.toString() || null;
   const {
     data: holdings,
     error: holdingsErr,
@@ -672,7 +671,7 @@ function Paper() {
       {!isLoading && !error && pnl && (
         <>
           <PortfolioSummary pnl={pnl} />
-          <RebalanceButton portfolioId={portfolioId} />
+          <RebalanceButton portfolioId={portfolioId!} />
           <HoldingsTable holdings={holdings || []} />
           <button
             className="btn-secondary"
