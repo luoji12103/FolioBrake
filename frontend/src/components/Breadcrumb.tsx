@@ -1,42 +1,27 @@
-import { Link, useLocation } from "react-router-dom";
-import "./Breadcrumb.css";
+import { Link } from "react-router-dom";
 
-const ROUTE_LABELS: Record<string, string> = {
-  "": "Dashboard",
-  universe: "Universe",
-  signals: "Signals",
-  risk: "Risk Overlay",
-  backtest: "Backtest",
-  audit: "Audit",
-  paper: "Paper Portfolio",
-  settings: "Settings",
-};
+interface BreadcrumbItem {
+  label: string;
+  path?: string;
+}
 
-export function Breadcrumb() {
-  const location = useLocation();
-  const pathnames = location.pathname.split("/").filter(Boolean);
+interface BreadcrumbProps {
+  items?: BreadcrumbItem[];
+}
 
-  if (pathnames.length === 0) return null;
-
+export function Breadcrumb({ items = [] }: BreadcrumbProps) {
   return (
-    <nav className="breadcrumb" aria-label="Breadcrumb">
-      <Link to="/" className="breadcrumb-link">Home</Link>
-      {pathnames.map((segment, index) => {
-        const routeTo = `/${pathnames.slice(0, index + 1).join("/")}`;
-        const isLast = index === pathnames.length - 1;
-        const label = ROUTE_LABELS[segment] || segment;
-
-        return (
-          <span key={routeTo} className="breadcrumb-segment">
-            <span className="breadcrumb-sep">/</span>
-            {isLast ? (
-              <span className="breadcrumb-current">{label}</span>
-            ) : (
-              <Link to={routeTo} className="breadcrumb-link">{label}</Link>
-            )}
-          </span>
-        );
-      })}
+    <nav style={{ display: "flex", gap: 8, marginBottom: 16, fontSize: 14 }}>
+      {items.map((item, i) => (
+        <span key={i} style={{ display: "flex", gap: 8 }}>
+          {i > 0 && <span style={{ color: "var(--color-text-muted)" }}>/</span>}
+          {item.path ? (
+            <Link to={item.path} style={{ color: "var(--color-accent)", textDecoration: "none" }}>{item.label}</Link>
+          ) : (
+            <span style={{ color: "var(--color-text)" }}>{item.label}</span>
+          )}
+        </span>
+      ))}
     </nav>
   );
 }
