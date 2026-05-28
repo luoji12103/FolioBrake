@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
 from datetime import date
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.strategy.models import StrategyConfig
 from app.backtest.models import BacktestConfig
@@ -21,7 +22,7 @@ class AuditRequest(BaseModel):
 
 
 @router.post("/run")
-def run_audit(req: AuditRequest, db: Session = Depends(get_db)):
+def run_audit(req: AuditRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     # Look up or create strategy config
     strat_cfg = db.execute(
         select(StrategyConfig).where(StrategyConfig.id == req.strategy_config_id)

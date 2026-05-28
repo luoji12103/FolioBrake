@@ -3,10 +3,11 @@ from datetime import date as date_type
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.paper.models import PaperPortfolio, PaperPosition, PaperOrder, PaperLedger
 from app.paper.engine import PaperTradingEngine
@@ -16,18 +17,18 @@ router = APIRouter(tags=["paper"])
 
 
 class CreatePortfolioRequest(BaseModel):
-    name: str = "default"
-    initial_capital: float = 100000.0
+    name: str = Field("default", min_length=1, max_length=128)
+    initial_capital: float = Field(100000.0, gt=0, le=1_000_000_000)
 
 
 class ApplySignalRequest(BaseModel):
     portfolio_id: int
-    signal_date: str
-    target_weights: dict[str, float]  # {"instrument_id": weight, ...}
+    signal_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    target_weights: dict[str, float]
 
 
 @router.post("/portfolio")
-def create_portfolio(req: CreatePortfolioRequest, db: Session = Depends(get_db)):
+def create_portfolio(req: CreatePortfolioRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     engine = PaperTradingEngine(db)
     pf = engine.create_portfolio(req.name, req.initial_capital)
     db.commit()
@@ -56,7 +57,12 @@ def get_portfolio(portfolio_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/portfolios/{portfolio_id}")
-def rename_portfolio(portfolio_id: int, name: str = Query(...), db: Session = Depends(get_db)):
+def rename_portfolio(
+    portfolio_id: int,
+    name: str = Query(..., min_length=1, max_length=128),
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
+):
     """Rename a paper portfolio."""
     pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == portfolio_id)).scalar_one_or_none()
     if not pf:
@@ -68,12 +74,12 @@ def rename_portfolio(portfolio_id: int, name: str = Query(...), db: Session = De
 
 class PreviewRequest(BaseModel):
     portfolio_id: int
-    signal_date: str
+    signal_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
     target_weights: dict[str, float]
 
 
 @router.post("/preview-rebalance")
-def preview_rebalance(req: PreviewRequest, db: Session = Depends(get_db)):
+def preview_rebalance(req: PreviewRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     """Preview rebalance: show what WOULD happen without executing.
 
     Returns current positions, target positions, trades needed, and cost estimates.
@@ -170,7 +176,7 @@ def execute_rebalance(req: PreviewRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/apply-signal")
-def apply_signal(req: ApplySignalRequest, db: Session = Depends(get_db)):
+def apply_signal(req: ApplySignalRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     from app.audit.models import AuditRun
     from sqlalchemy import desc
 

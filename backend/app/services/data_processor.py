@@ -11,7 +11,8 @@ class DataProcessor:
     def calculate_returns(self, prices: List[float]) -> List[float]:
         if len(prices) < 2:
             return []
-        return [(prices[i] - prices[i-1]) / prices[i-1] for i in range(1, len(prices))]
+        return [(prices[i] - prices[i-1]) / prices[i-1] if prices[i-1] != 0 else 0.0
+                for i in range(1, len(prices))]
     
     def normalize_data(self, data: List[float]) -> List[float]:
         if not data:

@@ -1,12 +1,6 @@
-"""API key authentication.
-
-Valid API keys are stored in the ``API_KEYS`` setting (comma-separated).
-The primary key is ``settings.SECRET_KEY`` as a fallback for dev convenience.
-"""
-
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
 from app.core.config import settings
@@ -26,7 +20,9 @@ def _load_keys() -> set[str]:
     return _valid_keys
 
 
-async def verify_api_key(api_key: str | None = Security(_api_key_header)) -> str:
+async def verify_api_key(
+    api_key: str | None = Security(_api_key_header),
+) -> str:
     if api_key is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

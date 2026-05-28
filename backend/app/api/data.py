@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_serializer
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.data.adapter import AKShareAdapter
@@ -13,6 +13,7 @@ from app.data.models import DailyBar, Instrument
 from app.data.source_manager import get_source_manager
 from app.data.sync import DataSyncService, sync_progress
 from app.db.base import get_db
+from app.core.auth import verify_api_key
 
 router = APIRouter(tags=["data"])
 
@@ -99,6 +100,7 @@ class SyncProgressOut(BaseModel):
 def sync_data(
     payload: SyncRequest,
     db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
 ) -> SyncSummary:
     """Sync daily bars for one or more ETF symbols."""
     service = DataSyncService(db)
@@ -160,18 +162,40 @@ def get_sync_progress(instrument_id: int) -> SyncProgressOut:
 
 @router.get(
     "/instruments",
-    response_model=list[InstrumentOut],
     summary="List ETF universe",
-    description="Return all ETF instruments in the database, ordered by symbol.",
+    description="Return ETF instruments in the database with pagination, ordered by symbol.",
 )
-def list_instruments(db: Session = Depends(get_db)) -> list[Instrument]:
-    """Return all instruments in the database."""
-    stmt = select(Instrument).order_by(Instrument.symbol)
-    return list(db.execute(stmt).scalars().all())
+def list_instruments(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    offset = (page - 1) * page_size
+    total = db.execute(select(func.count(Instrument.id))).scalar()
+    items = list(
+        db.execute(select(Instrument).order_by(Instrument.symbol).offset(offset).limit(page_size)).scalars().all()
+    )
+    return {
+        "items": [
+            {
+                "id": i.id,
+                "symbol": i.symbol,
+                "name": i.name,
+                "exchange": i.exchange,
+                "type": i.type,
+                "category": i.category,
+                "created_at": i.created_at,
+            }
+            for i in items
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 class AddInstrumentRequest(BaseModel):
-    symbol: str
+    symbol: str = Field(..., min_length=1, max_length=20, pattern=r"^[a-zA-Z0-9]+$")
 
 
 @router.post("/instruments", response_model=InstrumentOut)
@@ -366,6 +390,48 @@ def get_data_sources(db: Session = Depends(get_db)):
             for f in freshness
         ],
     }
+
+
+@router.get("/export/{symbol}")
+def export_data(symbol: str, format: str = Query("json"), db: Session = Depends(get_db)):
+    """Export OHLCV data for a symbol in JSON or CSV format."""
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+
+    normalised = symbol.strip().zfill(6)
+    inst = db.execute(select(Instrument).where(Instrument.symbol == normalised)).scalar_one_or_none()
+    if not inst:
+        raise HTTPException(status_code=404, detail=f"Instrument {normalised} not found")
+
+    bars = list(db.execute(
+        select(DailyBar).where(DailyBar.instrument_id == inst.id).order_by(DailyBar.trade_date)
+    ).scalars().all())
+
+    if format == "csv":
+        output = io.StringIO()
+        w = csv.writer(output)
+        w.writerow(["date", "open", "high", "low", "close", "volume"])
+        for b in bars:
+            w.writerow([str(b.trade_date), b.open, b.high, b.low, b.close, b.volume])
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode()),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={normalised}.csv"},
+        )
+
+    return [
+        {
+            "trade_date": str(b.trade_date),
+            "open": b.open,
+            "high": b.high,
+            "low": b.low,
+            "close": b.close,
+            "volume": b.volume,
+        }
+        for b in bars
+    ]
 
 
 @router.get("/sources/health")

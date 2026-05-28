@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import List
 import asyncio
 import json
@@ -8,45 +8,88 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+WS_MAX_CONNECTIONS = 100
+WS_MAX_MESSAGE_BYTES = 4096
+
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
+        if len(self.active_connections) >= WS_MAX_CONNECTIONS:
+            await websocket.close(code=1013, reason="Too many connections")
+            return False
         await websocket.accept()
         self.active_connections.append(websocket)
-    
+        return True
+
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-    
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
-            except:
-                pass
+            except Exception:
+                self.disconnect(connection)
 
 price_manager = ConnectionManager()
 risk_manager = ConnectionManager()
 
 @router.websocket("/ws/prices")
-async def websocket_prices(websocket: WebSocket):
-    await price_manager.connect(websocket)
+async def websocket_prices(
+    websocket: WebSocket,
+    token: str | None = Query(None),
+    api_key: str | None = Query(None, alias="api_key"),
+):
+    if not token and not api_key:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
+    connected = await price_manager.connect(websocket)
+    if not connected:
+        return
     try:
         while True:
             data = await websocket.receive_text()
+            if len(data.encode()) > WS_MAX_MESSAGE_BYTES:
+                await websocket.close(code=1009, reason="Message too large")
+                break
             await websocket.send_json({"type": "pong", "data": {}})
     except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"WebSocket prices error: {e}")
+    finally:
         price_manager.disconnect(websocket)
 
 @router.websocket("/ws/risk")
-async def websocket_risk(websocket: WebSocket):
-    await risk_manager.connect(websocket)
+async def websocket_risk(
+    websocket: WebSocket,
+    token: str | None = Query(None),
+    api_key: str | None = Query(None, alias="api_key"),
+):
+    if not token and not api_key:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
+    connected = await risk_manager.connect(websocket)
+    if not connected:
+        return
     try:
         while True:
             data = await websocket.receive_text()
+            if len(data.encode()) > WS_MAX_MESSAGE_BYTES:
+                await websocket.close(code=1009, reason="Message too large")
+                break
             await websocket.send_json({"type": "pong", "data": {}})
     except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"WebSocket risk error: {e}")
+    finally:
         risk_manager.disconnect(websocket)
 
 async def broadcast_price_update(symbol: str, price: float, change: float, change_pct: float):

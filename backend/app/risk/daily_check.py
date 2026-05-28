@@ -51,7 +51,7 @@ class MarketRiskEvaluator:
                 prices = [b.close for b in bars]
                 sma_60 = sum(prices[-60:]) / 60
                 current = prices[-1]
-                momentum_20 = (prices[-1] - prices[-21]) / prices[-21] if len(prices) >= 21 else 0
+                momentum_20 = (prices[-1] - prices[-21]) / prices[-21] if len(prices) >= 21 and prices[-21] != 0 else 0
                 triggered = current < sma_60 and momentum_20 < 0
                 rule_results.append(RiskRuleResultRecord(
                     date=as_of_date, rule_name="trend_break",
@@ -66,7 +66,11 @@ class MarketRiskEvaluator:
             if len(bars) >= 120:
                 import numpy as np
                 prices = [b.close for b in bars]
-                daily_rets = np.diff(prices[-20:]) / prices[-20:-1]
+                daily_rets = np.where(
+                    np.array(prices[-20:-1]) != 0,
+                    np.diff(prices[-20:]) / np.array(prices[-20:-1]),
+                    0.0,
+                )
                 vol_20 = float(np.std(daily_rets) * np.sqrt(252))
 
                 rolling_vols = []

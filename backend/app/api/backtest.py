@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.strategy.models import StrategyConfig
 from app.backtest.models import BacktestConfig, BacktestRun, PortfolioSnapshot, SimulatedTrade, PerformanceMetric
@@ -18,10 +19,10 @@ router = APIRouter(tags=["backtest"])
 
 class BacktestConfigRequest(BaseModel):
     strategy_config_id: int = 1
-    start_date: str
-    end_date: str
-    initial_capital: float = 100000.0
-    benchmark_symbol: str = "510050"
+    start_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    initial_capital: float = Field(100000.0, gt=0, le=1_000_000_000)
+    benchmark_symbol: str = Field("510050", max_length=20)
 
 
 @router.post(
@@ -33,7 +34,7 @@ class BacktestConfigRequest(BaseModel):
         "(commission: 3bps, slippage: 10bps). Returns run ID for fetching results."
     ),
 )
-def run_backtest(req: BacktestConfigRequest, db: Session = Depends(get_db)):
+def run_backtest(req: BacktestConfigRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     # Look up or create strategy config
     strat_cfg = db.execute(
         select(StrategyConfig).where(StrategyConfig.id == req.strategy_config_id)
@@ -65,7 +66,7 @@ def run_backtest(req: BacktestConfigRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/run-async")
-def run_backtest_async(req: BacktestConfigRequest):
+def run_backtest_async(req: BacktestConfigRequest, _: str = Depends(verify_api_key)):
     from app.workers.tasks import run_backtest as run_backtest_task
     task = run_backtest_task.delay(  # type: ignore[attr-defined]
         strategy_config_id=req.strategy_config_id,

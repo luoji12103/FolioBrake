@@ -179,6 +179,9 @@ function Universe() {
   const [newSymbol, setNewSymbol] = useState("");
   const [adding, setAdding] = useState(false);
   const [addMsg, setAddMsg] = useState<string | null>(null);
+  const [batchSymbols, setBatchSymbols] = useState("");
+  const [batchAdding, setBatchAdding] = useState(false);
+  const [batchMsg, setBatchMsg] = useState<string | null>(null);
   const [syncingInstrumentId, setSyncingInstrumentId] = useState<number | null>(null);
   const [syncingSymbol, setSyncingSymbol] = useState<string>("");
 
@@ -196,6 +199,26 @@ function Universe() {
     } catch (e: any) {
       setAddMsg(`Error: ${e?.response?.data?.detail || e.message}`);
     } finally { setAdding(false); }
+  };
+
+  const handleBatchAdd = async () => {
+    const symbols = batchSymbols.split("\n").map(s => s.trim()).filter(Boolean);
+    if (symbols.length === 0) return;
+    setBatchAdding(true); setBatchMsg(null);
+    let added = 0;
+    let errors = 0;
+    for (const symbol of symbols) {
+      try {
+        await api.post("/data/instruments", { symbol });
+        added++;
+      } catch {
+        errors++;
+      }
+    }
+    setBatchSymbols("");
+    setBatchMsg(`Added ${added} ETFs${errors > 0 ? `, ${errors} failed` : ""}`);
+    setBatchAdding(false);
+    refetch();
   };
 
   return (
@@ -226,6 +249,27 @@ function Universe() {
             <SyncProgressBar instrumentId={syncingInstrumentId} symbol={syncingSymbol} />
           </div>
         )}
+      </div>
+
+      <div className="card" style={{ marginBottom: "var(--space-4)" }}>
+        <div className="card-title" style={{ marginBottom: "var(--space-2)" }}>Batch Add ETFs</div>
+        <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-start" }}>
+          <textarea
+            className="form-input"
+            style={{ maxWidth: 300, minHeight: 80, resize: "vertical" }}
+            placeholder={"One symbol per line\n510050\n510300\n159915"}
+            value={batchSymbols}
+            onChange={(e) => setBatchSymbols(e.target.value)}
+          />
+          <button className="btn-primary" onClick={handleBatchAdd} disabled={batchAdding}>
+            {batchAdding ? "Adding..." : "Batch Add"}
+          </button>
+          {batchMsg && (
+            <span className={`toast ${batchMsg.includes("failed") ? "toast-error" : "toast-success"}`}>
+              {batchMsg}
+            </span>
+          )}
+        </div>
       </div>
 
       {health && (

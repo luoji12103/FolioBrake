@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { healthCheck } from "../api/client";
-import { useRiskState, useSignals, usePortfolio, usePaperPortfolios, usePaperPerformance, useRealtimePrices, Signal } from "../api/hooks";
+import {
+  useRiskState,
+  useSignals,
+  usePortfolio,
+  usePaperPortfolios,
+  usePaperPerformance,
+  usePaperPnl,
+  useRealtimePrices,
+  Signal,
+} from "../api/hooks";
 import { EquityChart, DrawdownChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { DataTable, type ColumnDef } from "../components/DataTable";
@@ -8,15 +17,13 @@ import "./shared.css";
 
 function DashboardSkeleton() {
   return (
-    <div style={{ marginTop: 4 }}>
-      <div className="metric-grid">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="skeleton-card">
-            <div className="skeleton" style={{ width: "40%", height: 12 }} />
-            <div className="skeleton" style={{ width: "65%", height: 28 }} />
-          </div>
-        ))}
-      </div>
+    <div className="stat-grid">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="skeleton-card">
+          <div className="skeleton" style={{ width: "40%", height: 12 }} />
+          <div className="skeleton" style={{ width: "65%", height: 28 }} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -42,6 +49,30 @@ const DASHBOARD_SIGNAL_COLUMNS: ColumnDef<Signal>[] = [
   },
 ];
 
+const RISK_BADGE_CLASS: Record<string, string> = {
+  NORMAL: "normal",
+  CAUTION: "caution",
+  DEFENSIVE: "defensive",
+  HALT: "halt",
+};
+
+const RISK_COLOR: Record<string, string> = {
+  NORMAL: "var(--color-green)",
+  CAUTION: "var(--color-yellow)",
+  DEFENSIVE: "var(--color-orange)",
+  HALT: "var(--color-red)",
+};
+
+function formatCurrency(value: number): string {
+  if (Math.abs(value) >= 1_000_000) {
+    return `$${(value / 1_000_000).toFixed(2)}M`;
+  }
+  if (Math.abs(value) >= 1_000) {
+    return `$${(value / 1_000).toFixed(1)}K`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
 function Dashboard() {
   const [health, setHealth] = useState<{ status: string; version: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +81,7 @@ function Dashboard() {
   const { data: signals } = useSignals();
   const { data: portfolio } = usePortfolio();
   const { data: portfolios } = usePaperPortfolios();
+  const { data: pnl } = usePaperPnl(portfolios?.[0]?.id?.toString() || null);
   const { data: performance } = usePaperPerformance(portfolios?.[0]?.id?.toString() || null);
   const { data: priceUpdate, connected: wsConnected } = useRealtimePrices();
 
@@ -68,138 +100,267 @@ function Dashboard() {
     ? [...signals].sort((a, b) => b.score - a.score)[0]
     : null;
 
-  const riskColor: Record<string, string> = {
-    NORMAL: "var(--color-green)",
-    CAUTION: "var(--color-yellow)",
-    DEFENSIVE: "var(--color-orange)",
-    HALT: "var(--color-red)",
-  };
+  const currentState = riskState?.state || "NORMAL";
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="page">
-      <h2>Dashboard</h2>
-
       {error && <ErrorMessage message={`Backend offline: ${error}`} onRetry={fetchHealth} />}
 
-      {healthLoading && <DashboardSkeleton />}
-
       {health && (
-        <div className="metric-grid">
-          <div className="metric-card">
-            <div className="metric-label">Risk State</div>
-            <div
-              className="metric-value"
-              style={{ color: riskColor[riskState?.state || "NORMAL"] || "var(--color-text)" }}
-            >
-              {riskState?.state || "NORMAL"}
-            </div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Portfolio</div>
-            <div className="metric-value">
-              {portfolio ? `${portfolio.length}` : "\u2014"}
-              {portfolio && (
-                <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)", marginLeft: 4, fontWeight: 500 }}>
-                  ETFs
+        <>
+          <div className="dashboard-header">
+            <div className="dashboard-header-left">
+              <h2 className="dashboard-title">{greeting}</h2>
+              <div className="dashboard-subtitle">
+                <span>{now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</span>
+                <span style={{ color: "var(--color-text-dim)" }}>·</span>
+                <span className={`risk-badge ${RISK_BADGE_CLASS[currentState] || "normal"}`}>
+                  <span style={{
+                    display: "inline-block",
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    backgroundColor: RISK_COLOR[currentState],
+                  }} />
+                  {currentState}
                 </span>
+                {wsConnected && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--color-text-dim)", fontSize: "var(--text-xs)" }}>
+                    <span style={{
+                      display: "inline-block",
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      backgroundColor: "var(--color-green)",
+                      animation: "badgePulse 2s infinite",
+                    }} />
+                    Live
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="dashboard-header-right">
+              <button className="btn-secondary" onClick={() => window.location.href = "/signals"}>View Signals</button>
+              <button className="btn-primary" onClick={() => window.location.href = "/paper"}>Portfolio</button>
+            </div>
+          </div>
+
+          <div className="stat-grid">
+            <div className="stat-card">
+              <div className="stat-label">
+                <span style={{ fontSize: 14 }}>📊</span>
+                Total Value
+              </div>
+              <div className="stat-value">
+                {pnl ? formatCurrency(pnl.total_value) : "\u2014"}
+              </div>
+              {pnl && (
+                <div className={`stat-trend ${pnl.total_pnl >= 0 ? "positive" : "negative"}`}>
+                  <span>{pnl.total_pnl >= 0 ? "↑" : "↓"}</span>
+                  {Math.abs(pnl.total_pnl_pct).toFixed(2)}%
+                </div>
+              )}
+              {pnl && (
+                <div className="stat-footer">
+                  Cash: {formatCurrency(pnl.cash)} · Invested: {formatCurrency(pnl.invested)}
+                </div>
               )}
             </div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Top Signal</div>
-            <div className="metric-value" style={{ fontSize: "var(--text-xl)" }}>
-              {topSignal ? (
-                <>
-                  <span style={{ color: "var(--color-accent)" }}>{topSignal.symbol}</span>
-                  <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)", marginLeft: 6, fontWeight: 500 }}>
-                    {topSignal.score.toFixed(1)}
-                  </span>
-                </>
-              ) : "\u2014"}
+
+            <div className="stat-card">
+              <div className="stat-label">
+                <span style={{ fontSize: 14 }}>💰</span>
+                P&L
+              </div>
+              <div className="stat-value" style={{ color: pnl ? (pnl.total_pnl >= 0 ? "var(--color-green)" : "var(--color-red)") : "var(--color-text)" }}>
+                {pnl ? `${pnl.total_pnl >= 0 ? "+" : ""}${formatCurrency(pnl.total_pnl)}` : "\u2014"}
+              </div>
+              {pnl && (
+                <div className={`stat-trend ${pnl.total_pnl >= 0 ? "positive" : "negative"}`}>
+                  <span>{pnl.total_pnl >= 0 ? "↑" : "↓"}</span>
+                  {pnl.total_pnl >= 0 ? "Gaining" : "Losing"}
+                </div>
+              )}
+              <div className="stat-footer">Paper portfolio performance</div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-label">
+                <span style={{ fontSize: 14 }}>📡</span>
+                Active Signals
+              </div>
+              <div className="stat-value">
+                {signals ? signals.length : "\u2014"}
+              </div>
+              {topSignal && (
+                <div className="stat-trend neutral">
+                  Top: {topSignal.symbol} ({topSignal.score.toFixed(1)})
+                </div>
+              )}
+              <div className="stat-footer">
+                {portfolio ? `${portfolio.length} ETFs tracked` : "Loading portfolio..."}
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-label">
+                <span style={{ fontSize: 14 }}>🛡️</span>
+                Risk Level
+              </div>
+              <div className="stat-value" style={{ color: RISK_COLOR[currentState] }}>
+                {currentState}
+              </div>
+              <div className={`stat-trend ${currentState === "NORMAL" ? "positive" : currentState === "HALT" ? "negative" : "neutral"}`}>
+                {currentState === "NORMAL" ? "All clear" : currentState === "CAUTION" ? "Monitoring" : currentState === "DEFENSIVE" ? "Defensive mode" : "Trading halted"}
+              </div>
+              <div className="stat-footer">Next rebalance: Friday</div>
             </div>
           </div>
-          <div className="metric-card">
-            <div className="metric-label">Next Rebalance</div>
-            <div className="metric-value" style={{ fontSize: "var(--text-xl)" }}>Friday</div>
+
+          <div className="quick-actions">
+            <a href="/signals" className="quick-action">
+              <div className="quick-action-icon">📡</div>
+              <div className="quick-action-text">
+                <span className="quick-action-label">Signals</span>
+                <span className="quick-action-desc">View ranked signals</span>
+              </div>
+            </a>
+            <a href="/paper" className="quick-action">
+              <div className="quick-action-icon">📈</div>
+              <div className="quick-action-text">
+                <span className="quick-action-label">Paper Trading</span>
+                <span className="quick-action-desc">Manage portfolios</span>
+              </div>
+            </a>
+            <a href="/risk" className="quick-action">
+              <div className="quick-action-icon">🛡️</div>
+              <div className="quick-action-text">
+                <span className="quick-action-label">Risk Controls</span>
+                <span className="quick-action-desc">Rules & overlays</span>
+              </div>
+            </a>
+            <a href="/backtest" className="quick-action">
+              <div className="quick-action-icon">🧪</div>
+              <div className="quick-action-text">
+                <span className="quick-action-label">Backtest</span>
+                <span className="quick-action-desc">Run strategies</span>
+              </div>
+            </a>
           </div>
-          <div className="metric-card">
-            <div className="metric-label">
-              Live Price
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: wsConnected ? "var(--color-green)" : "var(--color-red)",
-                  marginLeft: 6,
-                  verticalAlign: "middle",
-                }}
-              />
-            </div>
-            <div className="metric-value" style={{ fontSize: "var(--text-xl)" }}>
-              {priceUpdate ? (
-                <>
-                  <span style={{ color: "var(--color-accent)" }}>{priceUpdate.symbol}</span>
-                  <span style={{ marginLeft: 6 }}>{priceUpdate.price.toFixed(3)}</span>
-                  <span
-                    style={{
-                      fontSize: "var(--text-sm)",
-                      marginLeft: 6,
-                      color: priceUpdate.change >= 0 ? "var(--color-green)" : "var(--color-red)",
-                    }}
-                  >
-                    {priceUpdate.change >= 0 ? "+" : ""}
-                    {priceUpdate.change_pct.toFixed(2)}%
-                  </span>
-                </>
-              ) : (
-                <span style={{ color: "var(--color-text-dim)" }}>{"\u2014"}</span>
+
+          <div className="dashboard-grid">
+            <div className="dashboard-grid-main">
+              {performance && performance.equity_curve.length > 0 && (
+                <div className="card">
+                  <div className="card-title">Portfolio Performance</div>
+                  <EquityChart data={performance.equity_curve} benchmarkData={performance.benchmark_curve} />
+                  <div style={{ marginTop: 16 }}>
+                    <DrawdownChart data={performance.drawdown_curve} />
+                  </div>
+                  <div className="metric-grid" style={{ marginTop: 16 }}>
+                    <div className="metric-card">
+                      <div className="metric-label">CAGR</div>
+                      <div className="metric-value">{(performance.metrics.cagr * 100).toFixed(1)}%</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Sharpe</div>
+                      <div className="metric-value">{performance.metrics.sharpe_ratio.toFixed(2)}</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Max DD</div>
+                      <div className="metric-value">{(performance.metrics.max_drawdown * 100).toFixed(1)}%</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Win Rate</div>
+                      <div className="metric-value">{(performance.metrics.win_rate * 100).toFixed(0)}%</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {signals && signals.length > 0 && (
+                <div className="card">
+                  <div className="card-title">Latest Signals</div>
+                  <DataTable
+                    data={[...signals].sort((a, b) => a.rank - b.rank).slice(0, 5) as unknown as Record<string, unknown>[]}
+                    columns={DASHBOARD_SIGNAL_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
+                    showFilter={false}
+                    showPagination={false}
+                  />
+                </div>
               )}
             </div>
+
+            <div className="dashboard-grid-side">
+              <div className="timeline-card">
+                <div className="timeline-header">
+                  <div className="timeline-title">Recent Activity</div>
+                </div>
+                <div className="timeline-list">
+                  {topSignal && (
+                    <div className="timeline-item">
+                      <div className="timeline-dot" />
+                      <div className="timeline-content">
+                        <div className="timeline-text">
+                          Top signal: <strong style={{ color: "var(--color-accent)" }}>{topSignal.symbol}</strong> scored {topSignal.score.toFixed(1)}
+                        </div>
+                        <div className="timeline-meta">Latest signal update</div>
+                      </div>
+                    </div>
+                  )}
+                  {pnl && (
+                    <div className="timeline-item">
+                      <div className="timeline-dot" style={{ background: pnl.total_pnl >= 0 ? "var(--color-green)" : "var(--color-red)" }} />
+                      <div className="timeline-content">
+                        <div className="timeline-text">
+                          Portfolio {pnl.total_pnl >= 0 ? "up" : "down"} <strong>{Math.abs(pnl.total_pnl_pct).toFixed(2)}%</strong>
+                        </div>
+                        <div className="timeline-meta">P&L: {formatCurrency(pnl.total_pnl)}</div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="timeline-item">
+                    <div className="timeline-dot" style={{ background: RISK_COLOR[currentState] }} />
+                    <div className="timeline-content">
+                      <div className="timeline-text">
+                        Risk state: <strong style={{ color: RISK_COLOR[currentState] }}>{currentState}</strong>
+                      </div>
+                      <div className="timeline-meta">Current market regime</div>
+                    </div>
+                  </div>
+                  {priceUpdate && (
+                    <div className="timeline-item">
+                      <div className="timeline-dot" style={{ background: priceUpdate.change >= 0 ? "var(--color-green)" : "var(--color-red)" }} />
+                      <div className="timeline-content">
+                        <div className="timeline-text">
+                          <strong style={{ color: "var(--color-accent)" }}>{priceUpdate.symbol}</strong> at {priceUpdate.price.toFixed(3)}
+                          <span style={{ color: priceUpdate.change >= 0 ? "var(--color-green)" : "var(--color-red)", marginLeft: 6 }}>
+                            {priceUpdate.change >= 0 ? "+" : ""}{priceUpdate.change_pct.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="timeline-meta">Live price update</div>
+                      </div>
+                    </div>
+                  )}
+                  {health && (
+                    <div className="timeline-item">
+                      <div className="timeline-dot" style={{ background: "var(--color-text-dim)" }} />
+                      <div className="timeline-content">
+                        <div className="timeline-text">System healthy</div>
+                        <div className="timeline-meta">v{health.version}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      {performance && performance.equity_curve.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-title">Portfolio Performance</div>
-          <EquityChart data={performance.equity_curve} benchmarkData={performance.benchmark_curve} />
-          <div style={{ marginTop: 16 }}>
-            <DrawdownChart data={performance.drawdown_curve} />
-          </div>
-          <div className="metric-grid" style={{ marginTop: 16 }}>
-            <div className="metric-card">
-              <div className="metric-label">CAGR</div>
-              <div className="metric-value">{(performance.metrics.cagr * 100).toFixed(1)}%</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Sharpe</div>
-              <div className="metric-value">{performance.metrics.sharpe_ratio.toFixed(2)}</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Max DD</div>
-              <div className="metric-value">{(performance.metrics.max_drawdown * 100).toFixed(1)}%</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Win Rate</div>
-              <div className="metric-value">{(performance.metrics.win_rate * 100).toFixed(0)}%</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {signals && signals.length > 0 && (
-        <div className="card">
-          <div className="card-title">Latest Signals</div>
-          <DataTable
-            data={[...signals].sort((a, b) => a.rank - b.rank).slice(0, 5) as unknown as Record<string, unknown>[]}
-            columns={DASHBOARD_SIGNAL_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
-            showFilter={false}
-            showPagination={false}
-          />
-        </div>
-      )}
+      {healthLoading && <DashboardSkeleton />}
 
       {!healthLoading && !error && !health && (
         <div className="state-banner state-empty">

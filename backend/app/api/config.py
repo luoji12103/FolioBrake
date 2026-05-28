@@ -3,21 +3,26 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.auth import verify_api_key
 from app.core.config_center import config_center
 
 router = APIRouter(tags=["configuration"])
 
+ALLOWED_CONFIG_KEYS = {
+    "risk_profile", "max_concentration", "max_holdings", "min_positions",
+    "max_turnover", "commission", "slippage", "data_source", "monitoring_enabled",
+}
+
 
 class ConfigUpdate(BaseModel):
-    key: str
+    key: str = Field(..., min_length=1, max_length=128)
     value: Any
 
 
 class ConfigBulkUpdate(BaseModel):
-    values: dict[str, Any]
+    values: dict[str, Any] = Field(..., min_length=1, max_length=50)
 
 
 class ConfigSnapshotOut(BaseModel):

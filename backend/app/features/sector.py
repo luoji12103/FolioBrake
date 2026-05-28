@@ -22,8 +22,10 @@ def compute_sector_momentum(
     returns = []
     for symbol, prices in symbol_prices.items():
         if len(prices) > window:
-            ret = (prices[-1] - prices[-window - 1]) / prices[-window - 1]
-            returns.append(ret)
+            base_price = prices[-window - 1]
+            if base_price > 0:
+                ret = (prices[-1] - base_price) / base_price
+                returns.append(ret)
     return float(np.mean(returns)) if returns else 0.0
 
 

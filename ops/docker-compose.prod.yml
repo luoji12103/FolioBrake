@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-guardian}
     volumes:
       - guardian_postgres:/var/lib/postgresql/data
+      - ./init-db-security.sql:/docker-entrypoint-initdb.d/init-security.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-guardian} -d ${POSTGRES_DB:-guardian}"]
       interval: 10s
@@ -56,6 +57,7 @@ services:
       API_KEYS: ${API_KEYS:-}
       RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-100}
       RATE_LIMIT_PERIOD: ${RATE_LIMIT_PERIOD:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-20}

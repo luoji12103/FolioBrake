@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.features.models import FeatureDefinition, FeatureValue
 from app.features.registry import FeatureRegistry, VALID_TIMEFRAMES
@@ -23,8 +24,8 @@ class FeatureDefinitionOut(BaseModel):
 
 class ComputeRequest(BaseModel):
     instrument_id: int
-    as_of_date: str
-    timeframe: str = "daily"
+    as_of_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    timeframe: str = Field("daily", max_length=20)
 
 
 @router.get("/definitions", response_model=list[FeatureDefinitionOut])
@@ -39,7 +40,7 @@ def list_definitions(
 
 
 @router.post("/compute")
-def compute_features(req: ComputeRequest, db: Session = Depends(get_db)):
+def compute_features(req: ComputeRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     from datetime import date as date_type
     if req.timeframe not in VALID_TIMEFRAMES:
         return {"error": f"Invalid timeframe '{req.timeframe}'. Must be one of {VALID_TIMEFRAMES}"}

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Header
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -20,19 +20,19 @@ router = APIRouter(tags=["auth"])
 
 
 class RegisterRequest(BaseModel):
-    username: str
+    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     email: EmailStr
-    password: str
-    display_name: str | None = None
+    password: str = Field(..., min_length=8, max_length=128)
+    display_name: str | None = Field(None, max_length=128)
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class CreateAPIKeyRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(None, max_length=128)
 
 
 def get_current_user(

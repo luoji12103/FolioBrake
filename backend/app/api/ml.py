@@ -1,10 +1,11 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.ml.models import MLModelConfig, MLTrainingRun, MLPrediction
 from app.ml.engine import MLEngine
@@ -13,26 +14,26 @@ router = APIRouter(tags=["ml"])
 
 
 class TrainRequest(BaseModel):
-    name: str
-    model_type: str = "random_forest"
-    feature_set: list[str]
-    hyperparameters: dict = {}
-    target_horizon: int = 5
-    target_type: str = "binary_up"
+    name: str = Field(..., min_length=1, max_length=128)
+    model_type: str = Field("random_forest", max_length=64)
+    feature_set: list[str] = Field(..., min_length=1, max_length=100)
+    hyperparameters: dict = Field(default_factory=dict)
+    target_horizon: int = Field(5, ge=1, le=252)
+    target_type: str = Field("binary_up", max_length=32)
     instrument_id: int | None = None
-    train_start: str
-    train_end: str
-    test_split: float = 0.2
+    train_start: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    train_end: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    test_split: float = Field(0.2, gt=0.0, lt=1.0)
 
 
 class PredictRequest(BaseModel):
     training_run_id: int
     instrument_id: int
-    prediction_date: str
+    prediction_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 @router.post("/train")
-def train_model(req: TrainRequest, db: Session = Depends(get_db)):
+def train_model(req: TrainRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     config = MLModelConfig(
         name=req.name,
         model_type=req.model_type,

@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const host = process.env.TAURI_DEV_HOST;
-const apiTarget = process.env.VITE_API_TARGET || "http://localhost:8001";
+const apiTarget = process.env.VITE_API_TARGET || "http://localhost:8000";
 
 export default defineConfig(async () => ({
   plugins: [react()],

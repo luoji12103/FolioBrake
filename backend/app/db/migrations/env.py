@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
@@ -17,6 +20,12 @@ from app.auth import models  # noqa: F401
 from app.social import models  # noqa: F401
 
 config = context.config
+
+# SECURITY: override from env so credentials are never in alembic.ini
+_DATABASE_URL = os.environ.get("DATABASE_URL")
+if _DATABASE_URL:
+    config.set_main_option("sqlalchemy.url", _DATABASE_URL)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

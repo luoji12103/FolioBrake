@@ -6,6 +6,11 @@ from app.data.models import DailyBar, Instrument
 
 router = APIRouter(tags=["trend"])
 
+
 @router.get("/trend/{symbol}")
-def analyze_trend(symbol: str, period: int = Query(20), db: Session = Depends(get_db)):
+def analyze_trend(
+    symbol: str,
+    period: int = Query(20, ge=5, le=500),
+    db: Session = Depends(get_db),
+):
     return {"symbol": symbol, "period": period, "trend": "neutral", "strength": 0.5}

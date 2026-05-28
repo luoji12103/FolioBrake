@@ -5,7 +5,16 @@ __pycache__/
 dist/
 node_modules/
 target/
-.env
 *.log
 *.mobileconfig
 alembic.ini
+
+# Secrets – NEVER commit
+.env
+.env.local
+.env.production
+.env.staging
+*.pem
+*.key
+*.p12
+*.pfx

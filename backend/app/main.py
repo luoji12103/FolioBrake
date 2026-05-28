@@ -1,9 +1,13 @@
 import asyncio
+import logging
+import os
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.data import router as data_router
 from app.api.features import router as features_router
@@ -20,6 +24,7 @@ from app.api.nlp import router as nlp_router
 from app.api.auth import router as auth_router
 from app.api.social import router as social_router
 from app.api.config import router as config_router
+from app.api.webhook import router as webhook_router
 
 from app.core.config import settings
 from app.core.logging_config import CorrelationIdMiddleware, setup_logging, get_logger
@@ -52,6 +57,9 @@ async def lifespan(app: FastAPI):
     setup_logging(json_format=settings.LOG_JSON, level=settings.LOG_LEVEL)
     log = get_logger("startup")
     log.info("starting_application", env=settings.APP_ENV)
+
+    from app.core.secret_manager import warn_on_weak_secret_key
+    warn_on_weak_secret_key(settings.SECRET_KEY)
 
     from app.db.base import SessionLocal
     from app.features.models import FeatureDefinition
@@ -210,20 +218,58 @@ app = FastAPI(
     },
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=".*",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS: use explicit origins in production; wildcard only in dev
+_allowed_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] if settings.CORS_ORIGINS else []
+if settings.APP_ENV == "production" and not _allowed_origins:
+    _allowed_origins = ["https://localhost"]
+
+_cors_kwargs: dict = {
+    "allow_credentials": True,
+    "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    "allow_headers": ["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
+}
+if _allowed_origins:
+    _cors_kwargs["allow_origins"] = _allowed_origins
+else:
+    # Dev only: allow all origins but DO NOT allow credentials (security)
+    _cors_kwargs["allow_origin_regex"] = ".*"
+    _cors_kwargs["allow_credentials"] = False
+
+_security_log = logging.getLogger("security")
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])  # TODO: restrict in production
+
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(PrometheusMiddleware)
 
+from app.core.input_sanitizer import InputSanitizerMiddleware
+app.add_middleware(InputSanitizerMiddleware)
+
 from app.core.response_cache import ResponseCacheMiddleware
 app.add_middleware(ResponseCacheMiddleware)
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate" if request.url.path.startswith("/api/") else response.headers.get("Cache-Control", "public, max-age=300")
+    return response
 
 app.include_router(data_router, prefix="/api/data", tags=["data"])
 app.include_router(features_router, prefix="/api/features", tags=["features"])
@@ -240,6 +286,7 @@ app.include_router(nlp_router, prefix="/api/nlp", tags=["nlp"])
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(social_router, prefix="/api/social", tags=["social"])
 app.include_router(config_router, prefix="/api/config", tags=["configuration"])
+app.include_router(webhook_router, prefix="/api/webhook", tags=["webhook"])
 
 
 @app.get(

@@ -1,9 +1,10 @@
 from datetime import date as date_type
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.strategy.models import StrategyConfig, StrategyRun, Signal, TargetPortfolio, ExplanationLog
 from app.strategy.rotation import RiskAwareETFRotationV1
@@ -14,7 +15,7 @@ router = APIRouter(tags=["strategy"])
 
 
 class RunRequest(BaseModel):
-    as_of_date: str
+    as_of_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 class SignalOut(BaseModel):
@@ -35,7 +36,7 @@ class SignalOut(BaseModel):
         "Generates ranked signals, applies risk scaling, and produces a target portfolio."
     ),
 )
-def run_strategy(req: RunRequest, db: Session = Depends(get_db)):
+def run_strategy(req: RunRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     config = db.execute(select(StrategyConfig).limit(1)).scalar_one_or_none()
     if not config:
         config = StrategyConfig(name="risk_aware_etf_rotation_v1", version="v1",

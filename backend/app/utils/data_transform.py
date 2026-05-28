@@ -24,7 +24,7 @@ def aggregate_data(data: List[Dict], group_by: str, agg_field: str, agg_func: st
         if agg_func == "sum":
             result.append({group_by: key, agg_field: sum(values)})
         elif agg_func == "mean":
-            result.append({group_by: key, agg_field: sum(values) / len(values)})
+            result.append({group_by: key, agg_field: sum(values) / len(values) if values else 0})
         elif agg_func == "count":
             result.append({group_by: key, agg_field: len(values)})
     return result

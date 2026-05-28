@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.nlp.models import NewsArticle, SentimentResult
 from app.nlp.sentiment import SentimentAnalyzer
@@ -13,26 +14,26 @@ _analyzer = SentimentAnalyzer()
 
 
 class AnalyzeRequest(BaseModel):
-    text: str
+    text: str = Field(..., min_length=1, max_length=10000)
     instrument_id: int | None = None
 
 
 class AnalyzeBatchRequest(BaseModel):
-    texts: list[str]
+    texts: list[str] = Field(..., min_length=1, max_length=100)
     instrument_id: int | None = None
 
 
 class IngestNewsRequest(BaseModel):
-    title: str
-    content: str | None = None
-    source: str | None = None
-    url: str | None = None
+    title: str = Field(..., min_length=1, max_length=500)
+    content: str | None = Field(None, max_length=50000)
+    source: str | None = Field(None, max_length=200)
+    url: str | None = Field(None, max_length=2000)
     published_at: str | None = None
     instrument_id: int | None = None
 
 
 @router.post("/analyze")
-def analyze_text(req: AnalyzeRequest, db: Session = Depends(get_db)):
+def analyze_text(req: AnalyzeRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     result = _analyzer.analyze(req.text)
 
     record = SentimentResult(
@@ -54,7 +55,7 @@ def analyze_text(req: AnalyzeRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/analyze-batch")
-def analyze_batch(req: AnalyzeBatchRequest, db: Session = Depends(get_db)):
+def analyze_batch(req: AnalyzeBatchRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     results = _analyzer.analyze_batch(req.texts)
 
     records = []
@@ -80,7 +81,7 @@ def analyze_batch(req: AnalyzeBatchRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/ingest-news")
-def ingest_news(req: IngestNewsRequest, db: Session = Depends(get_db)):
+def ingest_news(req: IngestNewsRequest, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     article = NewsArticle(
         title=req.title,
         content=req.content,

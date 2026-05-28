@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc, func as sql_func
 
@@ -33,24 +33,24 @@ def _get_optional_user(
 
 class ShareStrategyRequest(BaseModel):
     strategy_config_id: int
-    title: str
-    description: str | None = None
-    tags: list[str] = []
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=2000)
+    tags: list[str] = Field(default_factory=list, max_length=20)
     is_public: bool = True
 
 
 class AddCommentRequest(BaseModel):
-    content: str
+    content: str = Field(..., min_length=1, max_length=5000)
 
 
 class AddPerformanceRequest(BaseModel):
-    snapshot_date: str
-    total_return: float = 0.0
-    sharpe_ratio: float = 0.0
-    max_drawdown: float = 0.0
-    win_rate: float = 0.0
-    trade_count: int = 0
-    extra_metrics: dict = {}
+    snapshot_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    total_return: float = Field(0.0, ge=-10.0, le=100.0)
+    sharpe_ratio: float = Field(0.0, ge=-10.0, le=100.0)
+    max_drawdown: float = Field(0.0, ge=-1.0, le=1.0)
+    win_rate: float = Field(0.0, ge=0.0, le=1.0)
+    trade_count: int = Field(0, ge=0)
+    extra_metrics: dict = Field(default_factory=dict)
 
 
 @router.post("/share")

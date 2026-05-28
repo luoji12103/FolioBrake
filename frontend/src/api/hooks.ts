@@ -164,7 +164,7 @@ export interface Instrument {
 export function useInstruments() {
   return useQuery(async () => {
     const { data } = await api.get("/data/instruments");
-    return data as Instrument[];
+    return (data.items ?? data) as Instrument[];
   });
 }
 

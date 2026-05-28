@@ -8,10 +8,13 @@ class HealthChecker:
             from app.db.base import SessionLocal
             from sqlalchemy import text
             db = SessionLocal()
-            db.execute(text("SELECT 1"))
-            db.close()
-            return True
-        except:
+            try:
+                db.execute(text("SELECT 1"))
+                return True
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Database health check failed: {e}")
             return False
     
     def check_redis(self) -> bool:
@@ -20,7 +23,8 @@ class HealthChecker:
             r = redis.Redis(host="redis", port=6379, socket_connect_timeout=2)
             r.ping()
             return True
-        except:
+        except Exception as e:
+            logger.warning(f"Redis health check failed: {e}")
             return False
     
     def get_health_status(self) -> dict:

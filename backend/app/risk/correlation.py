@@ -46,7 +46,8 @@ class CorrelationMonitor:
 
             if len(bars) >= 2:
                 prices = [b.close for b in reversed(bars)]
-                returns = list(np.diff(prices) / prices[:-1])
+                prices_arr = np.array(prices[:-1])
+                returns = list(np.where(prices_arr != 0, np.diff(prices) / prices_arr, 0.0))
                 inst = self.db.execute(
                     select(Instrument).where(Instrument.id == iid)
                 ).scalar_one_or_none()

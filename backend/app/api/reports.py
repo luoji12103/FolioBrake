@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from app.core.auth import verify_api_key
 from app.db.base import get_db
 from app.backtest.models import BacktestRun, PerformanceMetric, PortfolioSnapshot, SimulatedTrade
 from app.backtest.models import BacktestConfig
@@ -17,7 +18,7 @@ router = APIRouter(tags=["reports"])
 
 
 @router.get("/backtest/{run_id}/pdf")
-def export_backtest_pdf(run_id: int, db: Session = Depends(get_db)):
+def export_backtest_pdf(run_id: int, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     """Export backtest results as a simple text report (PDF requires reportlab)."""
     run = db.execute(select(BacktestRun).where(BacktestRun.id == run_id)).scalar_one_or_none()
     if not run:
@@ -46,7 +47,7 @@ Performance Metrics:
 
 
 @router.get("/portfolio/{portfolio_id}/csv")
-def export_portfolio_csv(portfolio_id: int, db: Session = Depends(get_db)):
+def export_portfolio_csv(portfolio_id: int, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     """Export portfolio data as CSV."""
     pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == portfolio_id)).scalar_one_or_none()
     if not pf:
@@ -71,7 +72,7 @@ def export_portfolio_csv(portfolio_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/backtest/{run_id}/pdf-full")
-def export_backtest_pdf_full(run_id: int, db: Session = Depends(get_db)):
+def export_backtest_pdf_full(run_id: int, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     from app.reports.generator import ReportGenerator
 
     run = db.execute(select(BacktestRun).where(BacktestRun.id == run_id)).scalar_one_or_none()
@@ -114,7 +115,7 @@ def export_backtest_pdf_full(run_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/portfolio/{portfolio_id}/pdf")
-def export_portfolio_pdf(portfolio_id: int, db: Session = Depends(get_db)):
+def export_portfolio_pdf(portfolio_id: int, db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     from app.reports.generator import ReportGenerator
 
     pf = db.execute(select(PaperPortfolio).where(PaperPortfolio.id == portfolio_id)).scalar_one_or_none()
@@ -159,7 +160,7 @@ def export_portfolio_pdf(portfolio_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/risk/pdf")
-def export_risk_pdf(db: Session = Depends(get_db)):
+def export_risk_pdf(db: Session = Depends(get_db), _: str = Depends(verify_api_key)):
     from app.reports.generator import ReportGenerator
 
     latest_state = db.execute(
