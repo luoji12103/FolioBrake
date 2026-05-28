@@ -22,10 +22,13 @@ dependencies = [
   "matplotlib>=3.8",
   "structlog>=23.0",
   "prometheus-client>=0.17",
+  "PyJWT>=2.8",
+  "bcrypt>=4.1",
+  "cryptography>=42.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy", "pip-audit"]
+dev = ["pytest", "ruff", "mypy", "safety", "pip-audit"]
 
 [build-system]
 requires = ["setuptools>=68"]

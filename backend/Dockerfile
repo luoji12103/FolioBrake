@@ -14,10 +14,13 @@ RUN mkdir -p /install/lib/python3.11/site-packages/efinance/data && \
 FROM python:3.11-slim
 
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends libpq5 curl && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
+RUN pip install --no-cache-dir --upgrade pip setuptools
 
 RUN mkdir -p /usr/local/lib/python3.11/site-packages/efinance/data && \
     chmod 755 /usr/local/lib/python3.11/site-packages/efinance/data

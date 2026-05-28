@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -11,10 +11,14 @@ from app.auth.security import (
     hash_password,
     verify_password,
     create_token,
+    create_refresh_token,
+    refresh_access_token,
     verify_token,
     generate_api_key,
     hash_api_key,
+    validate_password_strength,
 )
+from app.core.audit import AuditAction, log_audit_event
 
 router = APIRouter(tags=["auth"])
 
@@ -45,7 +49,7 @@ def get_current_user(
         payload = verify_token(token)
         if payload:
             user = db.execute(
-                select(User).where(User.id == payload["sub"])
+                select(User).where(User.id == int(payload["sub"]))
             ).scalar_one_or_none()
             if user and user.is_active:
                 return user
@@ -67,7 +71,11 @@ def get_current_user(
 
 
 @router.post("/register")
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    weakness = validate_password_strength(req.password)
+    if weakness:
+        raise HTTPException(status_code=422, detail=weakness)
+
     existing = db.execute(
         select(User).where((User.username == req.username) | (User.email == req.email))
     ).scalar_one_or_none()
@@ -85,19 +93,37 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(user)
 
     token = create_token(user.id, user.username)
+    refresh = create_refresh_token(user.id, user.username)
+    log_audit_event(
+        AuditAction.USER_REGISTER,
+        user_id=user.id,
+        username=user.username,
+        resource="user",
+        resource_id=user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return {
         "user_id": user.id,
         "username": user.username,
         "token": token,
+        "refresh_token": refresh,
     }
 
 
 @router.post("/login")
-def login(req: LoginRequest, db: Session = Depends(get_db)):
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.execute(
         select(User).where(User.username == req.username)
     ).scalar_one_or_none()
     if not user or not verify_password(req.password, user.hashed_password):
+        log_audit_event(
+            AuditAction.USER_LOGIN,
+            username=req.username,
+            resource="user",
+            details={"reason": "invalid_credentials"},
+            ip_address=request.client.host if request.client else None,
+            success=False,
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.is_active:
@@ -107,10 +133,20 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     db.commit()
 
     token = create_token(user.id, user.username)
+    refresh = create_refresh_token(user.id, user.username)
+    log_audit_event(
+        AuditAction.USER_LOGIN,
+        user_id=user.id,
+        username=user.username,
+        resource="user",
+        resource_id=user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return {
         "user_id": user.id,
         "username": user.username,
         "token": token,
+        "refresh_token": refresh,
     }
 
 
@@ -129,6 +165,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/api-keys")
 def create_api_key(
     req: CreateAPIKeyRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -141,6 +178,15 @@ def create_api_key(
     db.add(api_key)
     db.commit()
 
+    log_audit_event(
+        AuditAction.APIKEY_CREATE,
+        user_id=current_user.id,
+        username=current_user.username,
+        resource="api_key",
+        resource_id=api_key.id,
+        details={"name": req.name},
+        ip_address=request.client.host if request.client else None,
+    )
     return {
         "api_key_id": api_key.id,
         "key": raw_key,
@@ -174,6 +220,7 @@ def list_api_keys(
 @router.delete("/api-keys/{key_id}")
 def revoke_api_key(
     key_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -185,7 +232,40 @@ def revoke_api_key(
 
     key.is_active = False
     db.commit()
+    log_audit_event(
+        AuditAction.APIKEY_REVOKE,
+        user_id=current_user.id,
+        username=current_user.username,
+        resource="api_key",
+        resource_id=key_id,
+        ip_address=request.client.host if request.client else None,
+    )
     return {"status": "revoked", "key_id": key_id}
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/refresh")
+def refresh_token(req: RefreshRequest, request: Request):
+    new_token = refresh_access_token(req.refresh_token)
+    if new_token is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    return {"token": new_token}
+
+
+@router.post("/logout")
+def logout(request: Request, current_user: User = Depends(get_current_user)):
+    log_audit_event(
+        AuditAction.USER_LOGOUT,
+        user_id=current_user.id,
+        username=current_user.username,
+        resource="user",
+        resource_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return {"status": "logged_out"}
 
 
 @router.get("/users")

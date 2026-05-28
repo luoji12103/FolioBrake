@@ -5,6 +5,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -251,6 +252,22 @@ app.add_middleware(InputSanitizerMiddleware)
 from app.core.response_cache import ResponseCacheMiddleware
 app.add_middleware(ResponseCacheMiddleware)
 
+# Register global exception handlers
+from app.api.error_handler import global_exception_handler
+from fastapi.responses import JSONResponse as _JSONResponse
+
+
+def _validation_error_handler(request: Request, exc: Exception):
+    errors = exc.errors() if hasattr(exc, "errors") else []  # type: ignore[attr-defined]
+    return _JSONResponse(
+        status_code=422,
+        content={"success": False, "error": "Validation error", "detail": errors},
+    )
+
+
+app.add_exception_handler(Exception, global_exception_handler)
+app.add_exception_handler(RequestValidationError, _validation_error_handler)
+
 
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
@@ -268,6 +285,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate" if request.url.path.startswith("/api/") else response.headers.get("Cache-Control", "public, max-age=300")
     return response
 

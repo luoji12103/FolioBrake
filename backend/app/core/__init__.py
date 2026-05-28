@@ -19,6 +19,9 @@ from app.core.metrics import (
     DATA_SYNC_COUNT,
     RISK_STATE_CHANGES,
 )
+from app.core.audit import AuditAction, log_audit_event
+from app.core.rbac import Role, require_permission, require_role
+from app.core.encryption import encrypt_field, decrypt_field
 
 __all__ = [
     "settings",
@@ -39,4 +42,11 @@ __all__ = [
     "CACHE_MISSES",
     "DATA_SYNC_COUNT",
     "RISK_STATE_CHANGES",
+    "AuditAction",
+    "log_audit_event",
+    "Role",
+    "require_permission",
+    "require_role",
+    "encrypt_field",
+    "decrypt_field",
 ]
