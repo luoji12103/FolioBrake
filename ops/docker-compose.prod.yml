@@ -73,8 +73,14 @@ services:
       "--workers", "4",
       "--access-log",
       "--proxy-headers",
-      "--forwarded-allow-ips", "*",
+      "      --forwarded-allow-ips", "*",
     ]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -99,6 +105,12 @@ services:
       redis:
         condition: service_healthy
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=warning", "--concurrency=4"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app:celery_app inspect ping 2>/dev/null | grep -q OK || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -123,6 +135,12 @@ services:
       redis:
         condition: service_healthy
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=warning"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app:celery_app beat --version >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -143,6 +161,11 @@ services:
       - ./certs:/etc/nginx/certs:ro
     depends_on:
       - api-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -157,6 +180,11 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:

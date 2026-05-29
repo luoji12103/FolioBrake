@@ -4,6 +4,7 @@ import { useSignals, usePortfolio, useSignalHistory, Signal, SignalHistoryEntry,
 import { WeightBarChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { DataTable, type ColumnDef } from "../components/DataTable";
+import { useToast } from "../components/Toast";
 import "./shared.css";
 
 function ScoreBar({ score, maxScore = 100 }: { score: number; maxScore?: number }) {
@@ -238,13 +239,13 @@ function Signals() {
   const { data: signals, error, isLoading, refetch } = useSignals();
   const { data: portfolio, isLoading: portfolioLoading, error: portfolioError } = usePortfolio();
   const { data: historyData, isLoading: historyLoading } = useSignalHistory();
+  const { addToast } = useToast();
   const [paperId, setPaperId] = useState<number | null>(null);
   const [applying, setApplying] = useState(false);
-  const [applyMsg, setApplyMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"current" | "history">("current");
 
   const handleCreateAndApply = async () => {
-    setApplying(true); setApplyMsg(null);
+    setApplying(true);
     try {
       let pid = paperId;
       if (!pid) {
@@ -253,16 +254,16 @@ function Signals() {
         setPaperId(pid);
       }
       if (!portfolio || portfolio.length === 0) {
-        setApplyMsg("No portfolio weights to apply.");
+        addToast("warning", "No portfolio weights to apply.");
         return;
       }
       const weights: Record<string, number> = {};
       portfolio.forEach((p: any) => { weights[String(p.instrument_id)] = p.target_weight; });
       const today = new Date().toISOString().slice(0, 10);
       const { data: result } = await api.post("/paper/apply-signal", { portfolio_id: pid, signal_date: today, target_weights: weights });
-      setApplyMsg(`Executed ${result.applied} trades on paper portfolio #${pid}.`);
+      addToast("success", `Executed ${result.applied} trades on paper portfolio #${pid}.`);
     } catch (e: any) {
-      setApplyMsg(`Error: ${e?.response?.data?.detail || e.message}`);
+      addToast("error", e?.response?.data?.detail || e.message);
     } finally { setApplying(false); }
   };
 
@@ -327,11 +328,6 @@ function Signals() {
                   <button className="btn-primary" onClick={handleCreateAndApply} disabled={applying}>
                     {applying ? "Applying..." : (paperId ? `Apply to Portfolio #${paperId}` : "Create & Apply")}
                   </button>
-                  {applyMsg && (
-                    <span className={`toast ${applyMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
-                      {applyMsg}
-                    </span>
-                  )}
                 </div>
               </div>
             </>

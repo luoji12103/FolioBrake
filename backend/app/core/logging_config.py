@@ -5,11 +5,13 @@ Every log line is JSON with at minimum:
   - level
   - event / message
   - correlation_id  (auto-injected via middleware or manual bind)
+  - service         (bound at startup)
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from contextvars import ContextVar
 
@@ -31,9 +33,6 @@ def set_correlation_id(cid: str | None = None) -> str:
     return cid
 
 
-# ── structlog processors ───────────────────────────────────────────────────
-
-
 def _add_correlation_id(
     logger: structlog.types.WrappedLogger,
     method_name: str,
@@ -43,11 +42,31 @@ def _add_correlation_id(
     return event_dict
 
 
-def setup_logging(*, json_format: bool = True, level: str = "INFO") -> None:
-    """Configure structlog + stdlib logging once at startup."""
+def _add_service_context(
+    logger: structlog.types.WrappedLogger,
+    method_name: str,
+    event_dict: structlog.types.EventDict,
+) -> structlog.types.EventDict:
+    event_dict.setdefault("service", "folio-brake")
+    event_dict.setdefault("environment", os.getenv("APP_ENV", "dev"))
+    return event_dict
+
+
+def setup_logging(*, json_format: bool | None = None, level: str | None = None) -> None:
+    """Configure structlog + stdlib logging once at startup.
+
+    Reads LOG_LEVEL and LOG_JSON from environment when arguments are not
+    provided, falling back to INFO / True.
+    """
+    if json_format is None:
+        json_format = os.getenv("LOG_JSON", "true").lower() in ("true", "1", "yes")
+    if level is None:
+        level = os.getenv("LOG_LEVEL", "INFO")
+
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
         _add_correlation_id,
+        _add_service_context,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
@@ -75,7 +94,9 @@ def setup_logging(*, json_format: bool = True, level: str = "INFO") -> None:
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
 
-# ── Correlation-ID middleware ──────────────────────────────────────────────
+def bind_service_context(**kwargs: str) -> None:
+    """Bind persistent context (e.g. version, host) visible to all subsequent log calls."""
+    structlog.contextvars.bind_contextvars(**kwargs)
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):

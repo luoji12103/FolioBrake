@@ -25,11 +25,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-# ── Application info ────────────────────────────────────────────────────────
 APP_INFO = Info("folio_brake", "Retail ETF Guardian application info")
-APP_INFO.info({"version": "0.1.0", "environment": "dev"})
+APP_INFO.info({"version": "0.2.0", "environment": "dev"})
 
-# ── HTTP metrics ────────────────────────────────────────────────────────────
 REQUEST_COUNT = Counter(
     "http_requests_total",
     "Total HTTP requests",
@@ -49,10 +47,14 @@ REQUESTS_IN_PROGRESS = Gauge(
     ["method", "endpoint"],
 )
 
-# ── Database metrics ────────────────────────────────────────────────────────
+ACTIVE_CONNECTIONS = Gauge(
+    "active_connections",
+    "Active database connections",
+)
+
 DB_CONNECTIONS = Gauge(
     "db_active_connections",
-    "Active database connections",
+    "Active database connections from pool",
 )
 
 DB_QUERY_LATENCY = Histogram(
@@ -62,7 +64,19 @@ DB_QUERY_LATENCY = Histogram(
     buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
 )
 
-# ── Business metrics ────────────────────────────────────────────────────────
+CELERY_TASK_DURATION = Histogram(
+    "celery_task_duration_seconds",
+    "Celery task execution time in seconds",
+    ["task_name", "status"],
+    buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
+)
+
+CELERY_TASK_COUNT = Counter(
+    "celery_tasks_total",
+    "Total Celery tasks executed",
+    ["task_name", "status"],
+)
+
 DATA_SYNC_COUNT = Counter(
     "data_sync_total",
     "Total data sync operations",
@@ -92,8 +106,11 @@ RATE_LIMIT_HITS = Counter(
     "Total rate limit rejections",
 )
 
-
-# ── Metrics middleware ──────────────────────────────────────────────────────
+BACKUP_STATUS = Counter(
+    "backup_status_total",
+    "Total backup attempts",
+    ["status"],
+)
 
 
 def _normalise_path(path: str) -> str:
@@ -101,7 +118,6 @@ def _normalise_path(path: str) -> str:
     parts = path.strip("/").split("/")
     normalised: list[str] = []
     for part in parts:
-        # Collapse numeric / UUID segments
         if part.isdigit() or (len(part) == 36 and part.count("-") == 4):
             normalised.append("{id}")
         else:
@@ -116,7 +132,6 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         method = request.method
         endpoint = _normalise_path(request.url.path)
 
-        # Skip the metrics endpoint itself to avoid noise
         if endpoint == "/metrics":
             return await call_next(request)
 
@@ -139,13 +154,9 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
             REQUESTS_IN_PROGRESS.labels(method=method, endpoint=endpoint).dec()
 
 
-# ── /metrics endpoint helper ───────────────────────────────────────────────
-
-
 def get_metrics_response() -> Response:
     """Return a Starlette ``Response`` with the latest Prometheus scrape data."""
     registry = REGISTRY
-    # Support prometheus multiprocess mode when env var is set
     if "PROMETHEUS_MULTIPROC_DIR" in __import__("os").environ:
         registry = CollectorRegistry()
         multiprocess.MultiProcessCollector(registry)

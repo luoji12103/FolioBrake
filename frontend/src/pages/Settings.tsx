@@ -7,6 +7,7 @@ import {
   deleteStrategyConfig,
   useUserPreferences,
 } from "../api/hooks";
+import { useToast } from "../components/Toast";
 import "./shared.css";
 
 interface SettingsState {
@@ -83,15 +84,10 @@ function StrategyConfigSection() {
   const [editingVersion, setEditingVersion] = useState("v1");
   const [editingRiskProfile, setEditingRiskProfile] = useState("balanced");
   const [isCreating, setIsCreating] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const { addToast } = useToast();
 
   const selected = configs?.find((c) => c.id === selectedId) ?? null;
-
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const startCreate = () => {
     setIsCreating(true);
@@ -131,7 +127,7 @@ function StrategyConfigSection() {
           parameters: parsed,
           risk_profile: editingRiskProfile,
         });
-        showToast("success", "Config created");
+        addToast("success", "Config created");
       } else if (selectedId) {
         await updateStrategyConfig(selectedId, {
           name: editingName,
@@ -139,27 +135,27 @@ function StrategyConfigSection() {
           parameters: parsed,
           risk_profile: editingRiskProfile,
         });
-        showToast("success", "Config updated");
+        addToast("success", "Config updated");
       }
       setIsCreating(false);
       setSelectedId(null);
       refetch();
     } catch (err: any) {
-      showToast("error", err?.response?.data?.detail || "Save failed");
+      addToast("error", err?.response?.data?.detail || "Save failed");
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await deleteStrategyConfig(id);
-      showToast("success", "Config deleted");
+      addToast("success", "Config deleted");
       if (selectedId === id) {
         setSelectedId(null);
         setIsCreating(false);
       }
       refetch();
     } catch (err: any) {
-      showToast("error", err?.response?.data?.detail || "Delete failed");
+      addToast("error", err?.response?.data?.detail || "Delete failed");
     }
   };
 
@@ -307,12 +303,6 @@ function StrategyConfigSection() {
           </div>
         )}
       </div>
-
-      {toast && (
-        <span className={`toast toast-${toast.type}`} style={{ marginTop: "var(--space-3)" }}>
-          {toast.type === "success" ? "\u2713" : "\u2717"} {toast.msg}
-        </span>
-      )}
     </div>
   );
 }
@@ -400,7 +390,7 @@ function NotificationPreferencesCard() {
 function Settings() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
-  const [saved, setSaved] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
     setSettings(loadSettings());
@@ -412,13 +402,11 @@ function Settings() {
     value: SettingsState[K]
   ) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
-    setSaved(false);
   };
 
   const handleSave = () => {
     saveSettings(settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    addToast("success", "Settings saved successfully");
   };
 
   if (!isInitialized) {
@@ -570,22 +558,10 @@ function Settings() {
 
       <StrategyConfigSection />
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-3)",
-          marginTop: "var(--space-2)",
-        }}
-      >
+      <div style={{ marginTop: "var(--space-2)" }}>
         <button className="btn btn-primary" onClick={handleSave}>
           Save Settings
         </button>
-        {saved && (
-          <span className="toast toast-success">
-            {"\u2713"} Saved successfully
-          </span>
-        )}
       </div>
     </div>
   );

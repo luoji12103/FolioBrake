@@ -3,6 +3,7 @@ import api from "../api/client";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { DataTable, type ColumnDef } from "../components/DataTable";
 import { useInstruments, useDataHealth, useSyncProgress, Instrument } from "../api/hooks";
+import { useToast } from "../components/Toast";
 import "./shared.css";
 
 function formatDate(d: string | null): string {
@@ -68,6 +69,35 @@ const INSTRUMENT_COLUMNS: ColumnDef<Instrument>[] = [
     ),
   },
 ];
+
+function handleExport(instruments: Instrument[], format: "csv" | "json") {
+  const data = instruments.map((i) => ({
+    symbol: i.symbol,
+    name: i.name,
+    exchange: i.exchange,
+    type: i.type,
+    category: i.category ?? "",
+  }));
+  if (format === "csv") {
+    const headers = Object.keys(data[0]).join(",");
+    const rows = data.map((d) => Object.values(d).join(",")).join("\n");
+    const blob = new Blob([`${headers}\n${rows}`], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "instruments.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  } else {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "instruments.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}
 
 function UniverseTable({ instruments }: { instruments: Instrument[] }) {
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -176,35 +206,34 @@ function SyncProgressBar({ instrumentId, symbol }: { instrumentId: number; symbo
 function Universe() {
   const { data: health } = useDataHealth();
   const { data: instruments, error, isLoading, refetch } = useInstruments();
+  const { addToast } = useToast();
   const [newSymbol, setNewSymbol] = useState("");
   const [adding, setAdding] = useState(false);
-  const [addMsg, setAddMsg] = useState<string | null>(null);
   const [batchSymbols, setBatchSymbols] = useState("");
   const [batchAdding, setBatchAdding] = useState(false);
-  const [batchMsg, setBatchMsg] = useState<string | null>(null);
   const [syncingInstrumentId, setSyncingInstrumentId] = useState<number | null>(null);
   const [syncingSymbol, setSyncingSymbol] = useState<string>("");
 
   const handleAdd = async () => {
     if (!newSymbol.trim()) return;
-    setAdding(true); setAddMsg(null);
+    setAdding(true);
     const sym = newSymbol.trim();
     try {
       const { data } = await api.post("/data/instruments", { symbol: sym });
       setSyncingInstrumentId(data.id);
       setSyncingSymbol(sym);
       setNewSymbol("");
-      setAddMsg(`Added ${sym}. Syncing data...`);
+      addToast("success", `Added ${sym}. Syncing data...`);
       refetch();
     } catch (e: any) {
-      setAddMsg(`Error: ${e?.response?.data?.detail || e.message}`);
+      addToast("error", e?.response?.data?.detail || e.message);
     } finally { setAdding(false); }
   };
 
   const handleBatchAdd = async () => {
     const symbols = batchSymbols.split("\n").map(s => s.trim()).filter(Boolean);
     if (symbols.length === 0) return;
-    setBatchAdding(true); setBatchMsg(null);
+    setBatchAdding(true);
     let added = 0;
     let errors = 0;
     for (const symbol of symbols) {
@@ -216,7 +245,11 @@ function Universe() {
       }
     }
     setBatchSymbols("");
-    setBatchMsg(`Added ${added} ETFs${errors > 0 ? `, ${errors} failed` : ""}`);
+    if (errors > 0) {
+      addToast("warning", `Added ${added} ETFs, ${errors} failed`);
+    } else {
+      addToast("success", `Added ${added} ETFs`);
+    }
     setBatchAdding(false);
     refetch();
   };
@@ -238,11 +271,6 @@ function Universe() {
           <button className="btn-primary" onClick={handleAdd} disabled={adding}>
             {adding ? "Adding..." : "Add ETF"}
           </button>
-          {addMsg && (
-            <span className={`toast ${addMsg.startsWith("Error") ? "toast-error" : "toast-success"}`}>
-              {addMsg}
-            </span>
-          )}
         </div>
         {syncingInstrumentId && (
           <div style={{ marginTop: "var(--space-3)" }}>
@@ -264,11 +292,6 @@ function Universe() {
           <button className="btn-primary" onClick={handleBatchAdd} disabled={batchAdding}>
             {batchAdding ? "Adding..." : "Batch Add"}
           </button>
-          {batchMsg && (
-            <span className={`toast ${batchMsg.includes("failed") ? "toast-error" : "toast-success"}`}>
-              {batchMsg}
-            </span>
-          )}
         </div>
       </div>
 
@@ -314,6 +337,24 @@ function Universe() {
 
       {!isLoading && !error && instruments && instruments.length > 0 && (
         <div className="card">
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
+            <button className="btn-secondary" onClick={() => handleExport(instruments, "csv")}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Export CSV
+            </button>
+            <button className="btn-secondary" onClick={() => handleExport(instruments, "json")}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Export JSON
+            </button>
+          </div>
           <UniverseTable instruments={instruments} />
         </div>
       )}

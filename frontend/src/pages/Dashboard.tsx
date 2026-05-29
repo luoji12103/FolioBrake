@@ -13,6 +13,7 @@ import {
 import { EquityChart, DrawdownChart } from "../components/Charts";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { DataTable, type ColumnDef } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
 import "./shared.css";
 
 function DashboardSkeleton() {
@@ -280,6 +281,17 @@ function Dashboard() {
                 </div>
               )}
 
+              {!performance && (
+                <div className="card">
+                  <div className="card-title">Portfolio Performance</div>
+                  <EmptyState
+                    icon="📊"
+                    title="No performance data"
+                    description="Start a paper portfolio from the Signals page to track performance over time."
+                  />
+                </div>
+              )}
+
               {signals && signals.length > 0 && (
                 <div className="card">
                   <div className="card-title">Latest Signals</div>
@@ -288,6 +300,17 @@ function Dashboard() {
                     columns={DASHBOARD_SIGNAL_COLUMNS as unknown as ColumnDef<Record<string, unknown>>[]}
                     showFilter={false}
                     showPagination={false}
+                  />
+                </div>
+              )}
+
+              {signals && signals.length === 0 && (
+                <div className="card">
+                  <div className="card-title">Latest Signals</div>
+                  <EmptyState
+                    icon="📡"
+                    title="No signals yet"
+                    description="Signals are generated weekly by the strategy engine. Check back after the next evaluation run."
                   />
                 </div>
               )}

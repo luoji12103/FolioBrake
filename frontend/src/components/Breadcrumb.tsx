@@ -1,4 +1,14 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+
+const ROUTE_LABELS: Record<string, string> = {
+  universe: "Universe",
+  signals: "Signals",
+  risk: "Risk",
+  backtest: "Backtest",
+  audit: "Audit",
+  paper: "Paper Trading",
+  settings: "Settings",
+};
 
 interface BreadcrumbItem {
   label: string;
@@ -9,16 +19,30 @@ interface BreadcrumbProps {
   items?: BreadcrumbItem[];
 }
 
-export function Breadcrumb({ items = [] }: BreadcrumbProps) {
+export function Breadcrumb({ items }: BreadcrumbProps) {
+  const location = useLocation();
+
+  const resolved: BreadcrumbItem[] = items
+    ?? location.pathname
+      .split("/")
+      .filter(Boolean)
+      .map((segment, i, arr) => ({
+        label: ROUTE_LABELS[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1),
+        path: "/" + arr.slice(0, i + 1).join("/"),
+      }));
+
+  if (location.pathname === "/") return null;
+
   return (
-    <nav style={{ display: "flex", gap: 8, marginBottom: 16, fontSize: 14 }}>
-      {items.map((item, i) => (
-        <span key={i} style={{ display: "flex", gap: 8 }}>
-          {i > 0 && <span style={{ color: "var(--color-text-muted)" }}>/</span>}
-          {item.path ? (
-            <Link to={item.path} style={{ color: "var(--color-accent)", textDecoration: "none" }}>{item.label}</Link>
+    <nav className="breadcrumb" aria-label="Breadcrumb">
+      <Link to="/" className="breadcrumb-link">Home</Link>
+      {resolved.map((item, i) => (
+        <span key={i} className="breadcrumb-segment">
+          <span className="breadcrumb-sep">/</span>
+          {item.path && i < resolved.length - 1 ? (
+            <Link to={item.path} className="breadcrumb-link">{item.label}</Link>
           ) : (
-            <span style={{ color: "var(--color-text)" }}>{item.label}</span>
+            <span className="breadcrumb-current">{item.label}</span>
           )}
         </span>
       ))}

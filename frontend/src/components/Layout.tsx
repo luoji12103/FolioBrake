@@ -7,6 +7,7 @@ import { Kbd } from "./Kbd";
 import { CommandPalette } from "./CommandPalette";
 import { ShortcutHelper } from "./ShortcutHelper";
 import { Breadcrumb } from "./Breadcrumb";
+import "./Breadcrumb.css";
 import { LoadingBar } from "./LoadingBar";
 import RiskBadge from "./RiskBadge";
 import "./Layout.css";
